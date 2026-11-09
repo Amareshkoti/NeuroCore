@@ -9,6 +9,8 @@ from backend.neurons.base import BaseNeuronPopulation
 from backend.neurons.lif import LIFPopulation
 from backend.neurons.adex import AdExPopulation
 from backend.synapses.synapse import SynapticConnections
+from backend.learning.stdp import STDPPlasticity
+from backend.learning.homeostatic import HomeostaticPlasticity
 
 
 class SpikingNeuralNetwork:
@@ -82,9 +84,32 @@ class SpikingNeuralNetwork:
         self.recent_spikes_buffer = np.zeros((self.history_window_size, num_neurons), dtype=bool)
         self.buffer_pointer = 0
 
+        # Plasticity Subsystems
+        self.stdp_enabled = False
+        self.homeostatic_enabled = False
+        self.stdp = STDPPlasticity(
+            num_neurons=num_neurons,
+            dt_ms=dt_ms,
+            is_excitatory=is_exc,
+        )
+        self.homeostatic = HomeostaticPlasticity(
+            num_neurons=num_neurons,
+            dt_ms=dt_ms,
+        )
+        self.weight_history: List[float] = []  # Mean synaptic weight over time
+
         # Metrics tracking
         self.total_spike_count = 0
         self.population_firing_rates_hz = np.zeros(num_neurons, dtype=np.float32)
+
+    def configure_plasticity(self, stdp: bool = True, homeostatic: bool = False, a_plus: Optional[float] = None, a_minus: Optional[float] = None) -> None:
+        """Enable, disable, or calibrate synaptic learning parameters."""
+        self.stdp_enabled = stdp
+        self.homeostatic_enabled = homeostatic
+        if a_plus is not None:
+            self.stdp.a_plus = float(a_plus)
+        if a_minus is not None:
+            self.stdp.a_minus = float(a_minus)
 
     def inject_current(self, current_vector: np.ndarray) -> None:
         """Inject external sensory or experimental stimulation current."""
@@ -110,7 +135,22 @@ class SpikingNeuralNetwork:
         # 2. Advance neurons with total current (i_syn + i_ext)
         current_spikes = self.neurons.step(i_syn=i_syn, i_ext=self.i_ext)
 
-        # 3. Record spike event metadata
+        # 3. Apply Synaptic Plasticity (STDP & Homeostasis)
+        if self.stdp_enabled:
+            self.synapses.weights = self.stdp.step(self.synapses.weights, current_spikes)
+
+        if self.homeostatic_enabled and (self.step_count % 10 == 0):
+            self.synapses.weights = self.homeostatic.step(self.synapses.weights, current_spikes)
+
+        # Periodic weight tracking
+        if self.step_count % 50 == 0:
+            active_weights = self.synapses.weights[self.synapses.weights > 0]
+            if len(active_weights) > 0:
+                self.weight_history.append(float(np.mean(active_weights)))
+                if len(self.weight_history) > 1000:
+                    self.weight_history.pop(0)
+
+        # 4. Record spike event metadata
         spike_count = int(np.sum(current_spikes))
         self.total_spike_count += spike_count
 
@@ -203,6 +243,12 @@ class SpikingNeuralNetwork:
             "num_inhibitory": int(np.sum(~self.is_excitatory)),
             "num_synapses": self.synapses.num_synapses,
             "mean_synaptic_weight": round(float(np.mean(self.synapses.weights[self.synapses.weights > 0])), 4),
+            "stdp_enabled": self.stdp_enabled,
+            "homeostatic_enabled": self.homeostatic_enabled,
+            "stdp_ltp_events": self.stdp.total_ltp_events,
+            "stdp_ltd_events": self.stdp.total_ltd_events,
+            "stdp_net_weight_change": round(self.stdp.net_weight_change, 5),
+            "recent_mean_weight_trend": self.weight_history[-20:] if self.weight_history else [],
         }
 
     def get_visualization_payload(self, max_edges: int = 1500) -> Dict[str, Any]:

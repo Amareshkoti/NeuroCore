@@ -19,8 +19,8 @@
 |---|---|---|---|
 | **Milestone 0** | Environment Inspection & Architecture | **COMPLETED** | Verified Python 3.12, Torch CPU, Brian2, Ollama local daemon, ARCHITECTURE.md |
 | **Milestone 1** | Core Spiking Neural Network Simulator | **COMPLETED** | LIF/AdEx, 1,000 neurons, E/I Dale's principle, Brian2 validator, CLI experiment |
-| **Milestone 2** | Synaptic Plasticity & STDP | **IN PROGRESS** | Hebbian, STDP Bi & Poo, homeostatic scaling |
-| **Milestone 3** | Associative Memory & Pattern Storage | PENDING | Recurrent attractors, noisy/partial recall |
+| **Milestone 2** | Synaptic Plasticity & STDP | **COMPLETED** | Bi & Poo STDP (LTP/LTD), Homeostatic synaptic scaling, Hebbian learning |
+| **Milestone 3** | Associative Memory & Pattern Storage | **IN PROGRESS** | Recurrent attractors, noisy/partial recall |
 | **Milestone 4** | Experimental Engine & Benchmarks | PENDING | 8 Scientific experiments, CSV/JSON metrics |
 | **Milestone 5** | Ollama Local LLM Integration | PENDING | Client, model discovery, embedding generation |
 | **Milestone 6** | Hybrid AI Processing Pipeline | PENDING | Mode A / Mode B / Mode C comparison engine |
