@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
-import gsap from "gsap";
+import React, { useState, useEffect } from "react";
 import { RealtimeMetrics } from "../types";
 import { api } from "../services/api";
 import { GlassCard } from "../components/GlassCard";
-import { Play, Pause, RotateCcw, FastForward, Zap, Sliders, Activity, Layers, Sparkles } from "lucide-react";
+import { Play, Pause, RotateCcw, FastForward, Zap, Sliders, Activity, Layers } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 interface NeuralLabPageProps {
@@ -19,7 +18,6 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
   onRefreshMetrics,
   onNavigateTo3D,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [numNeurons, setNumNeurons] = useState<number>(1000);
   const [modelType, setModelType] = useState<string>("lif");
   const [stimAmplitude, setStimAmplitude] = useState<number>(2.5);
@@ -27,22 +25,6 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
   const [statusMsg, setStatusMsg] = useState<string>("");
   const [vHistory, setVHistory] = useState<{ t: number; v: number; rate: number }[]>([]);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.from(".lab-card", {
-        y: 30,
-        opacity: 0,
-        duration: 0.6,
-        stagger: 0.08,
-        ease: "power3.out",
-        clearProps: "all",
-      });
-    }, containerRef);
-    return () => ctx.revert();
-  }, []);
-
-  // Update rolling chart history when metrics arrive
   useEffect(() => {
     if (metrics) {
       setVHistory((prev) => {
@@ -54,14 +36,14 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
             rate: metrics.mean_firing_rate_hz,
           },
         ];
-        return next.length > 40 ? next.slice(next.length - 40) : next;
+        return next.length > 50 ? next.slice(next.length - 50) : next;
       });
     }
   }, [metrics]);
 
   const handleStart = async () => {
     await api.startSimulation();
-    setStatusMsg("Simulation running continuous ODE stepping");
+    setStatusMsg("Simulation running");
   };
 
   const handlePause = async () => {
@@ -103,84 +85,65 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
 
   return (
     <div
-      ref={containerRef}
       style={{
-        padding: "28px",
-        maxWidth: "1480px",
+        padding: "20px 24px",
+        maxWidth: "1440px",
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: "24px",
+        gap: "16px",
       }}
     >
-      {/* Action Control Strip */}
-      <GlassCard glowColor="cyan" className="lab-card" style={{ padding: "18px 24px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "16px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+      {/* Control Strip */}
+      <GlassCard style={{ padding: "12px 18px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             {!isRunning ? (
-              <button onClick={handleStart} className="btn btn-success" style={{ padding: "9px 20px" }}>
-                <Play size={16} /> Run Continuous
+              <button onClick={handleStart} className="btn btn-success">
+                <Play size={14} /> Run Simulation
               </button>
             ) : (
-              <button onClick={handlePause} className="btn btn-danger" style={{ padding: "9px 20px" }}>
-                <Pause size={16} /> Pause Simulation
+              <button onClick={handlePause} className="btn btn-danger">
+                <Pause size={14} /> Pause
               </button>
             )}
 
-            <button onClick={handleStep} className="btn btn-secondary" style={{ padding: "9px 16px" }}>
-              <FastForward size={16} /> Step (0.5ms)
+            <button onClick={handleStep} className="btn btn-secondary">
+              <FastForward size={14} /> Step (0.5ms)
             </button>
 
-            <button onClick={handleReset} className="btn btn-secondary" style={{ padding: "9px 16px" }}>
-              <RotateCcw size={16} /> Reset
+            <button onClick={handleReset} className="btn btn-secondary">
+              <RotateCcw size={14} /> Reset
             </button>
 
-            <button onClick={onNavigateTo3D} className="btn btn-primary" style={{ padding: "9px 18px" }}>
-              <Layers size={16} /> View 3D Cortical Space
+            <button onClick={onNavigateTo3D} className="btn btn-secondary">
+              <Layers size={14} /> View 3D Space
             </button>
           </div>
 
           {statusMsg && (
-            <div
-              style={{
-                fontSize: "12px",
-                fontFamily: "monospace",
-                color: "#38bdf8",
-                background: "rgba(6, 182, 212, 0.1)",
-                padding: "6px 14px",
-                borderRadius: "6px",
-                border: "1px solid rgba(6, 182, 212, 0.25)",
-              }}
-            >
-              [TELEMETRY] {statusMsg}
+            <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--accent-blue)" }}>
+              [{statusMsg}]
             </div>
           )}
         </div>
       </GlassCard>
 
       {/* Grid: Controls & Charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "24px" }}>
-        {/* Left Column: Network Sizing & Sensory Stimulation */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* Network Architecture Configuration */}
-          <GlassCard glowColor="purple" className="lab-card" style={{ padding: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "16px" }}>
+        {/* Left Column: Sizing & Injection */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Topology Configuration */}
+          <GlassCard>
             <div className="panel-header">
               <span className="panel-title">
-                <Sliders size={18} color="#a78bfa" /> Topology & Population
+                <Sliders size={15} /> Topology Configuration
               </span>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.875rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
               <div>
-                <label style={{ color: "#94a3b8", display: "block", marginBottom: "8px", fontWeight: 600 }}>
+                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
                   Network Size ({numNeurons} Neurons)
                 </label>
                 <div style={{ display: "flex", gap: "6px" }}>
@@ -189,7 +152,7 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
                       key={sz}
                       onClick={() => setNumNeurons(sz)}
                       className={`btn ${numNeurons === sz ? "btn-primary" : "btn-secondary"}`}
-                      style={{ flex: 1, padding: "6px 0", fontSize: "12px" }}
+                      style={{ flex: 1, padding: "5px 0", fontSize: "12px" }}
                     >
                       {sz}
                     </button>
@@ -198,23 +161,15 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
               </div>
 
               <div>
-                <label style={{ color: "#94a3b8", display: "block", marginBottom: "8px", fontWeight: 600 }}>
-                  Neuron Differential Equation Model
+                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
+                  Neuron Differential ODE Model
                 </label>
                 <select
                   value={modelType}
                   onChange={(e) => setModelType(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "rgba(10, 16, 30, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: "6px",
-                    color: "#f8fafc",
-                    padding: "8px 12px",
-                    outline: "none",
-                  }}
+                  style={{ width: "100%" }}
                 >
-                  <option value="lif">Leaky Integrate-and-Fire (LIF - Tau_m=20ms)</option>
+                  <option value="lif">Leaky Integrate-and-Fire (LIF)</option>
                   <option value="adex">Adaptive Exponential (AdEx - Brette & Gerstner)</option>
                 </select>
               </div>
@@ -222,50 +177,42 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
               <div
                 style={{
                   fontSize: "11px",
-                  color: "#94a3b8",
-                  background: "rgba(10, 16, 30, 0.6)",
-                  padding: "12px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.06)",
+                  color: "var(--text-secondary)",
+                  background: "var(--bg-surface-subtle)",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid var(--border-muted)",
                   lineHeight: 1.6,
                 }}
               >
-                <div>• Excitatory Pyramidal: 80% (AMPA conductance, tau=5.0ms)</div>
-                <div>• Inhibitory Interneurons: 20% (GABA conductance, tau=10.0ms)</div>
-                <div>• Dale's Principle strictly respected</div>
+                <div>• Excitatory Pyramidal: 80% (AMPA kinetics, tau=5.0ms)</div>
+                <div>• Inhibitory Interneurons: 20% (GABA kinetics, tau=10.0ms)</div>
+                <div>• Refractory period: 2.0ms clamping</div>
               </div>
 
-              <button onClick={handleCreate} className="btn btn-secondary" style={{ width: "100%", padding: "10px 0" }}>
-                Rebuild Differential Network
+              <button onClick={handleCreate} className="btn btn-secondary" style={{ width: "100%" }}>
+                Rebuild Network
               </button>
             </div>
           </GlassCard>
 
-          {/* Sensory Stimulation Injection */}
-          <GlassCard glowColor="amber" className="lab-card" style={{ padding: "24px" }}>
+          {/* Sensory Current Injection */}
+          <GlassCard>
             <div className="panel-header">
               <span className="panel-title">
-                <Zap size={18} color="#f59e0b" /> Sensory Stimulation Injection
+                <Zap size={15} /> Sensory Stimulation Injection
               </span>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.875rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
               <div>
-                <label style={{ color: "#94a3b8", display: "block", marginBottom: "8px", fontWeight: 600 }}>
+                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
                   Target Population Cluster
                 </label>
                 <select
                   value={targetCluster}
                   onChange={(e) => setTargetCluster(e.target.value)}
-                  style={{
-                    width: "100%",
-                    background: "rgba(10, 16, 30, 0.9)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: "6px",
-                    color: "#f8fafc",
-                    padding: "8px 12px",
-                    outline: "none",
-                  }}
+                  style={{ width: "100%" }}
                 >
                   <option value="sensory">Sensory Afferents (0-15% Cluster)</option>
                   <option value="inhibitory">Inhibitory Pool (Interneurons)</option>
@@ -274,9 +221,9 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
               </div>
 
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                  <span style={{ color: "#94a3b8" }}>Current Amplitude:</span>
-                  <span style={{ color: "#f59e0b", fontWeight: 700, fontFamily: "monospace" }}>{stimAmplitude} nA</span>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>Current Amplitude:</span>
+                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{stimAmplitude} nA</span>
                 </div>
                 <input
                   type="range"
@@ -285,84 +232,86 @@ export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
                   step="0.1"
                   value={stimAmplitude}
                   onChange={(e) => setStimAmplitude(parseFloat(e.target.value))}
-                  style={{ width: "100%", accentColor: "#f59e0b" }}
+                  style={{ width: "100%" }}
                 />
               </div>
 
-              <button onClick={handleInject} className="btn btn-primary" style={{ width: "100%", padding: "10px 0" }}>
-                <Zap size={15} /> Inject Stimulation Pulse
+              <button onClick={handleInject} className="btn btn-primary" style={{ width: "100%" }}>
+                <Zap size={14} /> Inject Stimulation Pulse
               </button>
             </div>
           </GlassCard>
         </div>
 
-        {/* Right Column: Live Physiological Charts & Telemetry */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          {/* Stat Cards Row */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "14px" }}>
-            <GlassCard glowColor="amber" className="lab-card" style={{ padding: "16px" }}>
-              <div className="stat-label">Active Spikes (Step)</div>
-              <div className="stat-val" style={{ color: "#f59e0b" }}>{metrics?.active_spikes_current_step ?? 0}</div>
-            </GlassCard>
-            <GlassCard glowColor="cyan" className="lab-card" style={{ padding: "16px" }}>
+        {/* Right Column: Charts & Telemetry */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {/* Stat Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
+            <div className="stat-card">
+              <div className="stat-label">Active Spikes</div>
+              <div className="stat-val">{metrics?.active_spikes_current_step ?? 0}</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-label">Mean Membrane V</div>
-              <div className="stat-val" style={{ color: "#38bdf8" }}>{metrics?.mean_membrane_potential_mv.toFixed(1) ?? "-65.0"} mV</div>
-            </GlassCard>
-            <GlassCard glowColor="emerald" className="lab-card" style={{ padding: "16px" }}>
-              <div className="stat-label">Mean Firing Rate</div>
-              <div className="stat-val" style={{ color: "#34d399" }}>{metrics?.mean_firing_rate_hz.toFixed(1) ?? "0.0"} Hz</div>
-            </GlassCard>
-            <GlassCard glowColor="purple" className="lab-card" style={{ padding: "16px" }}>
+              <div className="stat-val">{metrics?.mean_membrane_potential_mv.toFixed(1) ?? "-65.0"} mV</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-label">Firing Rate</div>
+              <div className="stat-val">{metrics?.mean_firing_rate_hz.toFixed(1) ?? "0.0"} Hz</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-label">Synchrony (Fano)</div>
-              <div className="stat-val" style={{ color: "#c084fc" }}>{metrics?.synchrony_fano_factor.toFixed(2) ?? "1.00"}</div>
-            </GlassCard>
-            <GlassCard glowColor="none" className="lab-card" style={{ padding: "16px" }}>
+              <div className="stat-val">{metrics?.synchrony_fano_factor.toFixed(2) ?? "1.00"}</div>
+            </div>
+            <div className="stat-card">
               <div className="stat-label">Total Spikes</div>
-              <div className="stat-val" style={{ color: "#cbd5e1" }}>{metrics?.total_spikes.toLocaleString() ?? 0}</div>
-            </GlassCard>
+              <div className="stat-val">{metrics?.total_spikes.toLocaleString() ?? 0}</div>
+            </div>
           </div>
 
-          {/* Real-time Membrane Potential Oscilloscope Chart */}
-          <GlassCard glowColor="cyan" className="lab-card" style={{ padding: "24px" }}>
+          {/* Oscilloscope Chart */}
+          <GlassCard>
             <div className="panel-header">
               <span className="panel-title">
-                <Activity size={18} color="#06b6d4" /> Population Mean Membrane Potential V(t)
+                <Activity size={15} /> Population Mean Membrane Potential V(t)
               </span>
-              <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>Rest: -65.0mV | Threshold: -50.0mV</span>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+                Rest: -65.0mV | Threshold: -50.0mV
+              </span>
             </div>
 
-            <div style={{ width: "100%", height: "260px" }}>
+            <div style={{ width: "100%", height: "240px" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={vHistory}>
                   <XAxis dataKey="t" stroke="#475569" fontSize={11} unit="ms" />
                   <YAxis domain={[-75, -45]} stroke="#475569" fontSize={11} unit="mV" />
                   <Tooltip
-                    contentStyle={{ background: "#0a0f1d", borderColor: "rgba(6, 182, 212, 0.3)", fontSize: "12px", color: "#f8fafc", borderRadius: "8px" }}
+                    contentStyle={{ background: "#0d121f", borderColor: "#1f293d", fontSize: "12px", color: "#f8fafc", borderRadius: "4px" }}
                   />
-                  <Line type="monotone" dataKey="v" stroke="#06b6d4" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </GlassCard>
 
           {/* Firing Rate History Chart */}
-          <GlassCard glowColor="emerald" className="lab-card" style={{ padding: "24px" }}>
+          <GlassCard>
             <div className="panel-header">
               <span className="panel-title">
-                <Activity size={18} color="#10b981" /> Population Firing Rate History (Hz)
+                <Activity size={15} /> Firing Rate History (Hz)
               </span>
-              <span style={{ fontSize: "11px", color: "#94a3b8" }}>Sliding 100ms Window</span>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>100ms Rolling Average</span>
             </div>
 
-            <div style={{ width: "100%", height: "180px" }}>
+            <div style={{ width: "100%", height: "160px" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={vHistory}>
                   <XAxis dataKey="t" stroke="#475569" fontSize={11} unit="ms" />
                   <YAxis stroke="#475569" fontSize={11} unit="Hz" />
                   <Tooltip
-                    contentStyle={{ background: "#0a0f1d", borderColor: "rgba(16, 185, 129, 0.3)", fontSize: "12px", color: "#f8fafc", borderRadius: "8px" }}
+                    contentStyle={{ background: "#0d121f", borderColor: "#1f293d", fontSize: "12px", color: "#f8fafc", borderRadius: "4px" }}
                   />
-                  <Line type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={1.5} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

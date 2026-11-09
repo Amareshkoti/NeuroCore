@@ -1,6 +1,6 @@
 import React from "react";
 import { SystemStatus, RealtimeMetrics } from "../types";
-import { Brain, Activity, Cpu, Bot, Radio } from "lucide-react";
+import { Brain, Cpu, Bot, HardDrive, Shield } from "lucide-react";
 
 interface HeaderProps {
   system: SystemStatus | null;
@@ -12,11 +12,9 @@ export const Header: React.FC<HeaderProps> = ({ system, metrics, isConnected }) 
   return (
     <header
       style={{
-        background: "rgba(8, 12, 22, 0.75)",
-        backdropFilter: "blur(24px)",
-        WebkitBackdropFilter: "blur(24px)",
-        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-        padding: "14px 28px",
+        background: "var(--bg-surface)",
+        borderBottom: "1px solid var(--border-default)",
+        padding: "10px 24px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
@@ -25,142 +23,103 @@ export const Header: React.FC<HeaderProps> = ({ system, metrics, isConnected }) 
         zIndex: 50,
       }}
     >
-      {/* Brand & Mission Statement */}
-      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+      {/* Brand & Platform Identity */}
+      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
         <div
-          className="pulse-glow"
           style={{
-            background: "linear-gradient(135deg, #06b6d4 0%, #8b5cf6 100%)",
-            width: "42px",
-            height: "42px",
-            borderRadius: "12px",
+            background: "#1e293b",
+            width: "32px",
+            height: "32px",
+            borderRadius: "4px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 8px 24px rgba(6, 182, 212, 0.4)",
-            transform: "rotate(-3deg)",
+            border: "1px solid var(--border-default)",
           }}
         >
-          <Brain size={24} color="#ffffff" />
+          <Brain size={18} color="#94a3b8" />
         </div>
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <h1
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: 900,
-                letterSpacing: "0.08em",
-                background: "linear-gradient(90deg, #f8fafc 0%, #38bdf8 100%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-              }}
-            >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "1rem", fontWeight: 700, letterSpacing: "0.02em", color: "#f8fafc" }}>
               NEUROCORE
-            </h1>
-            <span className="badge badge-cyan" style={{ fontSize: "10px" }}>
-              Antigravity Spatial OS
+            </span>
+            <span className="badge badge-neutral" style={{ fontSize: "10px" }}>
+              v1.0.0 Research Platform
+            </span>
+            <span className={`badge ${isConnected ? "badge-emerald" : "badge-red"}`} style={{ fontSize: "10px" }}>
+              {isConnected ? "Engine Connected" : "Connecting..."}
             </span>
           </div>
-          <p style={{ fontSize: "0.76rem", color: "#94a3b8", letterSpacing: "0.02em" }}>
-            Synthetic Biological Computing & Hybrid AI Workstation
-          </p>
+          <div style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+            Computational Neuroscience & Hybrid Intelligence Architecture
+          </div>
         </div>
       </div>
 
-      {/* Real-time Floating Glass Badges */}
-      <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+      {/* Hardware & Telemetry Readouts */}
+      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
         {/* Local Ollama Status */}
         <div
           style={{
-            background: "rgba(16, 24, 44, 0.65)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255, 255, 255, 0.09)",
-            borderRadius: "10px",
-            padding: "6px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.35)",
-          }}
-        >
-          <Bot size={16} color={system?.ollama.available ? "#10b981" : "#f43f5e"} />
-          <div>
-            <div style={{ fontSize: "9px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Local Ollama
-            </div>
-            <div style={{ fontWeight: 700, fontSize: "12px", color: system?.ollama.available ? "#34d399" : "#fda4af" }}>
-              {system?.ollama.available ? system.ollama.active_model : "Disconnected"}
-            </div>
-          </div>
-        </div>
-
-        {/* Host Machine Telemetry */}
-        <div
-          style={{
-            background: "rgba(16, 24, 44, 0.65)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255, 255, 255, 0.09)",
-            borderRadius: "10px",
-            padding: "6px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.35)",
-          }}
-        >
-          <Cpu size={16} color="#06b6d4" />
-          <div>
-            <div style={{ fontSize: "9px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Compute Grid
-            </div>
-            <div style={{ fontWeight: 700, fontSize: "12px", color: "#f1f5f9" }}>
-              {system?.hardware ? `${system.hardware.cpu_count_logical}T CPU · ${system.hardware.ram_total_gb}GB` : "Profiling..."}
-            </div>
-          </div>
-        </div>
-
-        {/* Biological Clock */}
-        <div
-          style={{
-            background: "rgba(16, 24, 44, 0.65)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255, 255, 255, 0.09)",
-            borderRadius: "10px",
-            padding: "6px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.35)",
-          }}
-        >
-          <Activity size={16} color={system?.simulation.is_running ? "#10b981" : "#f59e0b"} />
-          <div>
-            <div style={{ fontSize: "9px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-              Sim Time
-            </div>
-            <div style={{ fontWeight: 800, fontSize: "12px", fontFamily: "monospace", color: "#38bdf8" }}>
-              {metrics ? `${metrics.current_time_ms.toFixed(1)} ms` : "0.0 ms"}
-            </div>
-          </div>
-        </div>
-
-        {/* WebSocket Signal */}
-        <div
-          style={{
-            background: "rgba(16, 24, 44, 0.65)",
-            backdropFilter: "blur(12px)",
-            border: "1px solid rgba(255, 255, 255, 0.09)",
-            borderRadius: "10px",
-            padding: "8px 12px",
+            background: "var(--bg-surface-subtle)",
+            border: "1px solid var(--border-muted)",
+            borderRadius: "4px",
+            padding: "4px 10px",
             display: "flex",
             alignItems: "center",
             gap: "8px",
           }}
         >
-          <Radio size={14} color={isConnected ? "#10b981" : "#f43f5e"} />
-          <span style={{ fontSize: "11px", fontWeight: 700, color: isConnected ? "#34d399" : "#fda4af" }}>
-            {isConnected ? "WS 25FPS" : "Reconnecting"}
-          </span>
+          <Bot size={14} color={system?.ollama.available ? "#10b981" : "#f43f5e"} />
+          <div style={{ fontSize: "11px" }}>
+            <span style={{ color: "var(--text-muted)" }}>LLM: </span>
+            <span style={{ fontWeight: 600, color: system?.ollama.available ? "var(--text-primary)" : "#f87171" }}>
+              {system?.ollama.available ? system.ollama.active_model : "Offline"}
+            </span>
+          </div>
+        </div>
+
+        {/* CPU / RAM Telemetry */}
+        <div
+          style={{
+            background: "var(--bg-surface-subtle)",
+            border: "1px solid var(--border-muted)",
+            borderRadius: "4px",
+            padding: "4px 10px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <Cpu size={14} color="#94a3b8" />
+          <div style={{ fontSize: "11px" }}>
+            <span style={{ color: "var(--text-muted)" }}>CPU: </span>
+            <span style={{ fontWeight: 600, fontFamily: "var(--font-mono)" }}>
+              {system?.process_resources.cpu_percent.toFixed(0) ?? 0}%
+            </span>
+          </div>
+        </div>
+
+        {/* Live Spikes / Time Telemetry */}
+        <div
+          style={{
+            background: "var(--bg-surface-subtle)",
+            border: "1px solid var(--border-muted)",
+            borderRadius: "4px",
+            padding: "4px 10px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981" }} />
+          <div style={{ fontSize: "11px", fontFamily: "var(--font-mono)" }}>
+            <span style={{ color: "var(--text-muted)" }}>t=</span>
+            <span style={{ fontWeight: 600 }}>{metrics?.current_time_ms.toFixed(1) ?? "0.0"}ms</span>
+            <span style={{ color: "var(--text-muted)", marginLeft: "6px" }}>spikes=</span>
+            <span style={{ fontWeight: 600 }}>{metrics?.total_spikes.toLocaleString() ?? 0}</span>
+          </div>
         </div>
       </div>
     </header>

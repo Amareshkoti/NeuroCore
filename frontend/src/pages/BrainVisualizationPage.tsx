@@ -1,10 +1,9 @@
-import React, { useEffect, useState, useRef } from "react";
-import gsap from "gsap";
+import React, { useEffect, useState } from "react";
 import { NeuralNetworkCanvas } from "../visualization/NeuralNetworkCanvas";
 import { api } from "../services/api";
 import { NeuronVisualData, SynapticEdgeVisualData, RealtimeMetrics } from "../types";
 import { GlassCard } from "../components/GlassCard";
-import { RefreshCw, Play, Pause, Zap, Cpu, Sparkles, Layers, Eye } from "lucide-react";
+import { RefreshCw, Play, Pause, Zap, Layers } from "lucide-react";
 
 interface BrainVisualizationPageProps {
   metrics: RealtimeMetrics | null;
@@ -15,26 +14,10 @@ export const BrainVisualizationPage: React.FC<BrainVisualizationPageProps> = ({
   metrics,
   isRunning,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [neurons, setNeurons] = useState<NeuronVisualData[]>([]);
   const [edges, setEdges] = useState<SynapticEdgeVisualData[]>([]);
   const [selectedNeuron, setSelectedNeuron] = useState<NeuronVisualData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.from(".viz-card", {
-        y: 25,
-        opacity: 0,
-        duration: 0.6,
-        stagger: 0.08,
-        ease: "power3.out",
-        clearProps: "all",
-      });
-    }, containerRef);
-    return () => ctx.revert();
-  }, []);
 
   const fetchNetworkTopology = async () => {
     setIsLoading(true);
@@ -59,120 +42,110 @@ export const BrainVisualizationPage: React.FC<BrainVisualizationPageProps> = ({
 
   return (
     <div
-      ref={containerRef}
       style={{
-        padding: "24px",
-        maxWidth: "1600px",
+        padding: "20px 24px",
+        maxWidth: "1440px",
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: "20px",
+        gap: "16px",
       }}
     >
-      {/* Top Banner & Control Strip */}
-      <GlassCard glowColor="cyan" className="viz-card" style={{ padding: "14px 24px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "16px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "#f8fafc", letterSpacing: "-0.01em" }}>
-              3D Cortical WebGL Canvas
+      {/* Top Control Strip */}
+      <GlassCard style={{ padding: "10px 18px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 600, fontSize: "0.95rem" }}>
+              3D Cortical WebGL View
             </span>
-            <span className="badge badge-cyan">{neurons.length} Neurons In View</span>
-            <span className="badge badge-purple">{edges.length} Synaptic Fibers</span>
+            <span className="badge badge-neutral">{neurons.length} Neurons</span>
+            <span className="badge badge-neutral">{edges.length} Synapses</span>
             {selectedNeuron && (
-              <span className="badge badge-emerald">
-                Focused: Neuron #{selectedNeuron.id} ({selectedNeuron.is_exc ? "Excitatory Pyramidal" : "Inhibitory Interneuron"})
+              <span className="badge badge-blue">
+                Neuron #{selectedNeuron.id} ({selectedNeuron.is_exc ? "Excitatory Pyramidal" : "Inhibitory Interneuron"})
               </span>
             )}
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <button
               onClick={() => (isRunning ? api.pauseSimulation() : api.startSimulation())}
               className={`btn ${isRunning ? "btn-danger" : "btn-success"}`}
-              style={{ padding: "7px 16px", fontSize: "13px" }}
+              style={{ padding: "5px 12px", fontSize: "12px" }}
             >
-              {isRunning ? <Pause size={14} /> : <Play size={14} />}
-              {isRunning ? "Pause Sim" : "Resume Sim"}
+              {isRunning ? <Pause size={13} /> : <Play size={13} />}
+              {isRunning ? "Pause" : "Run"}
             </button>
 
             <button
               onClick={handleInject}
               className="btn btn-primary"
-              style={{ padding: "7px 16px", fontSize: "13px" }}
+              style={{ padding: "5px 12px", fontSize: "12px" }}
             >
-              <Zap size={14} /> Inject Sensory Burst
+              <Zap size={13} /> Inject Pulse
             </button>
 
             <button
               onClick={fetchNetworkTopology}
               className="btn btn-secondary"
-              style={{ padding: "7px 14px", fontSize: "13px" }}
-              title="Refresh 3D mesh"
+              style={{ padding: "5px 12px", fontSize: "12px" }}
+              title="Refresh topology"
             >
-              <RefreshCw size={14} /> Refresh
+              <RefreshCw size={13} /> Reload Mesh
             </button>
           </div>
         </div>
       </GlassCard>
 
       {/* Main 3D Canvas Box */}
-      <GlassCard glowColor="none" className="viz-card" style={{ padding: "6px", minHeight: "600px", position: "relative" }}>
+      <div
+        style={{
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-default)",
+          borderRadius: "4px",
+          minHeight: "560px",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
         <NeuralNetworkCanvas
           neurons={neurons}
           edges={edges}
           metrics={metrics}
           onSelectNeuron={setSelectedNeuron}
         />
-      </GlassCard>
+      </div>
 
-      {/* Bottom Info Bar: 3 Spatial Explainer Panels */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: "18px",
-        }}
-      >
-        <GlassCard glowColor="cyan" className="viz-card" style={{ padding: "18px 20px" }}>
-          <h4 style={{ fontSize: "13px", color: "#06b6d4", marginBottom: "6px", textTransform: "uppercase", fontWeight: 700 }}>
-            Spatial Navigation & Controls
-          </h4>
-          <p style={{ fontSize: "12px", color: "#94a3b8", lineHeight: 1.6 }}>
-            • <strong style={{ color: "#f1f5f9" }}>Orbit Camera:</strong> Click and drag left mouse button.
-            <br />
-            • <strong style={{ color: "#f1f5f9" }}>Optical Zoom:</strong> Scroll wheel forwards / backwards.
-            <br />
-            • <strong style={{ color: "#f1f5f9" }}>Neuron Inspection:</strong> Hover or click any neuron node to inspect
-            instantaneous membrane potential, firing frequency, and phenotype.
+      {/* Info Footers */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "14px" }}>
+        <GlassCard>
+          <div className="panel-header">
+            <span className="panel-title">Navigation Controls</span>
+          </div>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            • <strong>Rotate:</strong> Left mouse button drag<br />
+            • <strong>Zoom:</strong> Mouse wheel up / down<br />
+            • <strong>Inspect:</strong> Click any neuron point to query instantaneous membrane potential and phenotype.
           </p>
         </GlassCard>
 
-        <GlassCard glowColor="purple" className="viz-card" style={{ padding: "18px 20px" }}>
-          <h4 style={{ fontSize: "13px", color: "#8b5cf6", marginBottom: "6px", textTransform: "uppercase", fontWeight: 700 }}>
-            Biological Ellipsoid Architecture
-          </h4>
-          <p style={{ fontSize: "12px", color: "#94a3b8", lineHeight: 1.6 }}>
+        <GlassCard>
+          <div className="panel-header">
+            <span className="panel-title">Spatial Coordinate Model</span>
+          </div>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
             Neurons are distributed within an ellipsoidal 3D coordinate space modeling cortical laminar depth.
-            Excitatory pyramidal neurons (cyan) drive forward and recurrent excitation, while inhibitory interneurons (crimson)
-            counterbalance runaway dynamics per Dale's principle.
+            Cyan nodes represent excitatory pyramidal neurons (AMPA); crimson nodes represent inhibitory interneurons (GABA).
           </p>
         </GlassCard>
 
-        <GlassCard glowColor="emerald" className="viz-card" style={{ padding: "18px 20px" }}>
-          <h4 style={{ fontSize: "13px", color: "#10b981", marginBottom: "6px", textTransform: "uppercase", fontWeight: 700 }}>
-            Real-Time Electrical Fidelity
-          </h4>
-          <p style={{ fontSize: "12px", color: "#94a3b8", lineHeight: 1.6 }}>
-            Spikes flash luminous gold on the exact simulation step an action potential threshold crossing occurs.
-            No artificial animation or pseudo-activity is generated: the WebGL shaders directly reflect the Python ODE state.
+        <GlassCard>
+          <div className="panel-header">
+            <span className="panel-title">Electrical Fidelity</span>
+          </div>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+            Action potentials are visualized instantaneously upon differential threshold crossing.
+            No artificial animation or pseudo-activity is injected.
           </p>
         </GlassCard>
       </div>

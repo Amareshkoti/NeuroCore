@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import gsap from "gsap";
+import React, { useState } from "react";
 import { SystemStatus, RealtimeMetrics } from "../types";
 import { GlassCard } from "../components/GlassCard";
-import { Gauge, Cpu, HardDrive, Play, Zap, CheckCircle, BarChart2, Activity } from "lucide-react";
+import { Gauge, Cpu, BarChart2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 interface BenchmarksPageProps {
@@ -11,25 +10,9 @@ interface BenchmarksPageProps {
 }
 
 export const BenchmarksPage: React.FC<BenchmarksPageProps> = ({ system, metrics }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [benchmarkResults, setBenchmarkResults] = useState<any[]>([]);
   const [isRunningBench, setIsRunningBench] = useState<boolean>(false);
   const [statusMsg, setStatusMsg] = useState<string>("");
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.from(".bench-card", {
-        y: 25,
-        opacity: 0,
-        duration: 0.6,
-        stagger: 0.08,
-        ease: "power3.out",
-        clearProps: "all",
-      });
-    }, containerRef);
-    return () => ctx.revert();
-  }, []);
 
   const handleRunThroughputSweep = async () => {
     setIsRunningBench(true);
@@ -70,30 +53,28 @@ export const BenchmarksPage: React.FC<BenchmarksPageProps> = ({ system, metrics 
 
   return (
     <div
-      ref={containerRef}
       style={{
-        padding: "28px",
-        maxWidth: "1480px",
+        padding: "20px 24px",
+        maxWidth: "1440px",
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: "24px",
+        gap: "16px",
       }}
     >
-      {/* Top Banner */}
-      <GlassCard glowColor="cyan" className="bench-card" style={{ padding: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+      {/* Header Banner */}
+      <GlassCard style={{ padding: "16px 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
           <div>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              <span className="badge badge-cyan">Hardware Profiling</span>
+            <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+              <span className="badge badge-blue">Hardware Profiling</span>
               <span className="badge badge-emerald">Real-Time Performance</span>
-              <span className="badge badge-purple">Vectorized CPU</span>
             </div>
-            <h2 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>
+            <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-primary)" }}>
               Hardware Optimization & Computational Benchmarks
             </h2>
-            <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "6px" }}>
-              Direct quantification of CPU memory bandwidth, differential solver throughput, and real-time scaling factors.
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
+              Quantification of differential solver throughput and real-time execution scaling factors.
             </p>
           </div>
 
@@ -101,54 +82,59 @@ export const BenchmarksPage: React.FC<BenchmarksPageProps> = ({ system, metrics 
             onClick={handleRunThroughputSweep}
             disabled={isRunningBench}
             className="btn btn-primary"
-            style={{ padding: "10px 20px" }}
           >
-            <Gauge size={16} /> {isRunningBench ? "Benchmarking Sweep..." : "Run Throughput Sweep"}
+            <Gauge size={14} /> {isRunningBench ? "Benchmarking..." : "Run Throughput Sweep"}
           </button>
         </div>
       </GlassCard>
 
-      {/* Grid: Hardware Profile & Real-time Scaling */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "22px" }}>
+      {/* Grid: Hardware Specs & Chart */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "16px" }}>
         {/* Hardware Specs Panel */}
-        <GlassCard glowColor="purple" className="bench-card" style={{ padding: "24px" }}>
+        <GlassCard>
           <div className="panel-header">
             <span className="panel-title">
-              <Cpu size={18} color="#8b5cf6" /> Silicon Compute Capabilities
+              <Cpu size={15} /> Compute Environment
             </span>
             <span className="badge badge-emerald">Verified</span>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "0.875rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#94a3b8" }}>Host Processor:</span>
-              <span style={{ color: "#f1f5f9", fontWeight: 600 }}>{system?.hardware.processor}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#94a3b8" }}>Logical Threads:</span>
-              <span style={{ color: "#38bdf8", fontWeight: 700 }}>{system?.hardware.cpu_count_logical} Threads</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#94a3b8" }}>PyTorch Vectorization:</span>
-              <span style={{ color: "#34d399", fontWeight: 600 }}>{system?.hardware.torch_version} (AVX2 Enabled)</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#94a3b8" }}>Max Stable SNN Size:</span>
-              <span style={{ color: "#fbbf24", fontWeight: 700 }}>5,000 Neurons (Real-time)</span>
-            </div>
-          </div>
+          <table className="data-table">
+            <tbody>
+              <tr>
+                <td style={{ color: "var(--text-secondary)", width: "40%" }}>Processor</td>
+                <td style={{ fontWeight: 600 }}>{system?.hardware.processor}</td>
+              </tr>
+              <tr>
+                <td style={{ color: "var(--text-secondary)" }}>Logical Threads</td>
+                <td style={{ fontFamily: "var(--font-mono)" }}>{system?.hardware.cpu_count_logical} Threads</td>
+              </tr>
+              <tr>
+                <td style={{ color: "var(--text-secondary)" }}>PyTorch Backend</td>
+                <td style={{ fontFamily: "var(--font-mono)" }}>{system?.hardware.torch_version}</td>
+              </tr>
+              <tr>
+                <td style={{ color: "var(--text-secondary)" }}>Recommended Device</td>
+                <td style={{ fontFamily: "var(--font-mono)" }}>{system?.hardware.recommended_device}</td>
+              </tr>
+              <tr>
+                <td style={{ color: "var(--text-secondary)" }}>Status Message</td>
+                <td style={{ fontSize: "11px", color: "var(--text-muted)" }}>{statusMsg || "Awaiting benchmark trigger"}</td>
+              </tr>
+            </tbody>
+          </table>
         </GlassCard>
 
-        {/* Throughput Chart Panel */}
-        <GlassCard glowColor="cyan" className="bench-card" style={{ padding: "24px" }}>
+        {/* Throughput Chart */}
+        <GlassCard>
           <div className="panel-header">
             <span className="panel-title">
-              <BarChart2 size={18} color="#06b6d4" /> Differential Steps / Second Throughput
+              <BarChart2 size={15} /> Differential Steps / Second Throughput
             </span>
-            <span className="badge badge-cyan">ODE Rate</span>
+            <span className="badge badge-neutral">ODE Rate</span>
           </div>
 
-          <div style={{ width: "100%", height: "220px" }}>
+          <div style={{ width: "100%", height: "200px" }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={
@@ -165,9 +151,9 @@ export const BenchmarksPage: React.FC<BenchmarksPageProps> = ({ system, metrics 
                 <XAxis dataKey="num_neurons" stroke="#475569" fontSize={11} />
                 <YAxis stroke="#475569" fontSize={11} />
                 <Tooltip
-                  contentStyle={{ background: "#0a0f1d", borderColor: "rgba(6, 182, 212, 0.3)", fontSize: "12px", color: "#f8fafc", borderRadius: "8px" }}
+                  contentStyle={{ background: "#0d121f", borderColor: "#1f293d", fontSize: "12px", color: "#f8fafc", borderRadius: "4px" }}
                 />
-                <Bar dataKey="steps_per_sec" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="steps_per_sec" fill="#2563eb" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

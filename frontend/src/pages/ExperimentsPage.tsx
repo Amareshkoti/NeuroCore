@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
-import gsap from "gsap";
+import React, { useState, useEffect } from "react";
 import { api } from "../services/api";
 import { GlassCard } from "../components/GlassCard";
-import { FlaskConical, Play, CheckCircle, Clock, Zap, FileText, Download, Activity, Sparkles, ShieldCheck } from "lucide-react";
+import { FlaskConical, Play, CheckCircle, Clock } from "lucide-react";
 
 export const ExperimentsPage: React.FC = () => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [runningId, setRunningId] = useState<number | null>(null);
   const [activeResult, setActiveResult] = useState<any>(null);
   const [history, setHistory] = useState<any[]>([]);
@@ -17,73 +15,50 @@ export const ExperimentsPage: React.FC = () => {
       title: "Experiment 1: Pattern Recognition",
       description: "Classifies structured sensory input patterns using rate coding into an SNN reservoir with linear readout.",
       target: "SNN Reservoir Classifier",
-      glow: "cyan" as const,
     },
     {
       id: 2,
       title: "Experiment 2: Associative Memory",
       description: "Embeds sparse orthogonal prototypes in synaptic matrix W; tests attractor recall from 40% occluded cues.",
       target: "Recurrent Attractor Network",
-      glow: "purple" as const,
     },
     {
       id: 3,
       title: "Experiment 3: Temporal Sequence Learning",
       description: "Tests asymmetric STDP training of sequential transition pathways (A -> B -> C) and autonomous delay replay.",
       target: "Axonal Delay Replay",
-      glow: "amber" as const,
     },
     {
       id: 4,
       title: "Experiment 4: STDP Learning",
       description: "Quantifies Long-Term Potentiation (LTP) and Long-Term Depression (LTD) dynamics under paired stimulation.",
       target: "Bi & Poo Synaptic Plasticity",
-      glow: "purple" as const,
     },
     {
       id: 5,
       title: "Experiment 5: Noise Resistance",
       description: "Evaluates attractor stability and bit recovery across 10%, 20%, 30%, 40%, and 50% bit-flip corruption noise.",
       target: "Attractor Energy Basins",
-      glow: "emerald" as const,
     },
     {
       id: 6,
       title: "Experiment 6: Excitatory vs Inhibitory Behaviour",
       description: "Demonstrates how Dale's principle balanced inhibition prevents epileptic runaway synchronization.",
       target: "Cortical E/I Balance",
-      glow: "cyan" as const,
     },
     {
       id: 7,
       title: "Experiment 7: SNN vs Conventional Feedforward ANN",
       description: "Direct empirical benchmark between Spiking Neural Network and standard PyTorch MLP on the identical dataset.",
       target: "PyTorch MLP vs SNN",
-      glow: "amber" as const,
     },
     {
       id: 8,
       title: "Experiment 8: LLM-Only vs Neural-Only vs Hybrid AI",
       description: "Comparative study across Mode A, Mode B, and Mode C hybrid processing using the local Ollama instance.",
       target: "Hybrid Intelligence",
-      glow: "emerald" as const,
     },
   ];
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.from(".exp-card", {
-        y: 25,
-        opacity: 0,
-        duration: 0.6,
-        stagger: 0.06,
-        ease: "power3.out",
-        clearProps: "all",
-      });
-    }, containerRef);
-    return () => ctx.revert();
-  }, []);
 
   const fetchHistory = async () => {
     try {
@@ -116,69 +91,55 @@ export const ExperimentsPage: React.FC = () => {
 
   return (
     <div
-      ref={containerRef}
       style={{
-        padding: "28px",
-        maxWidth: "1480px",
+        padding: "20px 24px",
+        maxWidth: "1440px",
         margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: "24px",
+        gap: "16px",
       }}
     >
-      {/* Top Banner */}
-      <GlassCard glowColor="purple" className="exp-card" style={{ padding: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+      {/* Header Banner */}
+      <GlassCard style={{ padding: "16px 20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
           <div>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
-              <span className="badge badge-purple">Scientific Verification Engine</span>
-              <span className="badge badge-cyan">Reproducible Seeds</span>
-              <span className="badge badge-emerald">Real Logging</span>
+            <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
+              <span className="badge badge-purple">Scientific Verification</span>
+              <span className="badge badge-neutral">Reproducible Seeds</span>
             </div>
-            <h2 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>
+            <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-primary)" }}>
               Automated Neuroscience Experiments & Benchmarks
             </h2>
-            <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "6px" }}>
-              All 8 required scientific milestones with real metric collection, CSV/JSON archiving, and honest evaluation.
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
+              Eight scientific experiments with metric logging, CSV/JSON recording, and direct validation.
             </p>
           </div>
 
           {statusMsg && (
-            <div
-              style={{
-                fontSize: "12px",
-                fontFamily: "monospace",
-                color: "#38bdf8",
-                background: "rgba(6, 182, 212, 0.1)",
-                padding: "8px 16px",
-                borderRadius: "6px",
-                border: "1px solid rgba(6, 182, 212, 0.25)",
-              }}
-            >
-              [RUNNER] {statusMsg}
+            <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--accent-blue)" }}>
+              [{statusMsg}]
             </div>
           )}
         </div>
       </GlassCard>
 
       {/* Grid: 8 Experiments List */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "18px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
         {experimentsList.map((exp) => (
           <GlassCard
             key={exp.id}
-            glowColor={exp.glow}
-            className="exp-card"
-            style={{ padding: "20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}
+            style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
           >
             <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                <span className="badge badge-cyan" style={{ fontSize: "10px" }}>EXP {exp.id}</span>
-                <span className="badge badge-purple" style={{ fontSize: "10px" }}>{exp.target}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                <span className="badge badge-blue">EXP {exp.id}</span>
+                <span className="badge badge-neutral">{exp.target}</span>
               </div>
-              <h3 style={{ fontSize: "1.05rem", fontWeight: 700, color: "#f8fafc", marginBottom: "8px" }}>
+              <h3 style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
                 {exp.title}
               </h3>
-              <p style={{ fontSize: "0.85rem", color: "#94a3b8", lineHeight: 1.6, marginBottom: "16px" }}>
+              <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "14px" }}>
                 {exp.description}
               </p>
             </div>
@@ -187,54 +148,54 @@ export const ExperimentsPage: React.FC = () => {
               onClick={() => handleRun(exp.id)}
               disabled={runningId !== null}
               className={`btn ${runningId === exp.id ? "btn-secondary" : "btn-primary"}`}
-              style={{ width: "100%", padding: "10px 0" }}
+              style={{ width: "100%" }}
             >
-              {runningId === exp.id ? <Clock size={15} /> : <Play size={15} />}
-              {runningId === exp.id ? "Executing Simulation..." : "Run Experiment"}
+              {runningId === exp.id ? <Clock size={13} /> : <Play size={13} />}
+              {runningId === exp.id ? "Executing..." : "Run Experiment"}
             </button>
           </GlassCard>
         ))}
       </div>
 
-      {/* Active Experiment Detailed Results Panel */}
+      {/* Active Experiment Results Panel */}
       {activeResult && (
-        <GlassCard glowColor="emerald" className="exp-card" style={{ padding: "24px" }}>
+        <GlassCard>
           <div className="panel-header">
             <span className="panel-title">
-              <CheckCircle size={18} color="#10b981" /> Experiment Results: {activeResult.experiment_name}
+              <CheckCircle size={15} color="#10b981" /> Experiment Results: {activeResult.experiment_name}
             </span>
-            <span className="badge badge-emerald">Verified Execution</span>
+            <span className="badge badge-emerald">Completed</span>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "12px", marginBottom: "20px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginBottom: "14px" }}>
             <div className="stat-card">
               <div className="stat-label">Execution Time</div>
-              <div className="stat-val" style={{ color: "#38bdf8" }}>{activeResult.metrics.execution_time_sec.toFixed(3)} s</div>
+              <div className="stat-val">{activeResult.metrics.execution_time_sec.toFixed(3)}s</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Neurons</div>
-              <div className="stat-val" style={{ color: "#a78bfa" }}>{activeResult.metrics.network_size}</div>
+              <div className="stat-val">{activeResult.metrics.network_size}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Spikes Recorded</div>
-              <div className="stat-val" style={{ color: "#f59e0b" }}>{activeResult.metrics.spikes_emitted.toLocaleString()}</div>
+              <div className="stat-val">{activeResult.metrics.spikes_emitted.toLocaleString()}</div>
             </div>
             <div className="stat-card">
               <div className="stat-label">Firing Rate</div>
-              <div className="stat-val" style={{ color: "#34d399" }}>{activeResult.metrics.mean_firing_rate_hz.toFixed(1)} Hz</div>
+              <div className="stat-val">{activeResult.metrics.mean_firing_rate_hz.toFixed(1)} Hz</div>
             </div>
           </div>
 
           <div
             style={{
-              background: "rgba(10, 16, 30, 0.85)",
-              border: "1px solid rgba(255, 255, 255, 0.08)",
-              borderRadius: "8px",
-              padding: "16px",
-              fontFamily: "monospace",
-              fontSize: "12px",
-              color: "#38bdf8",
-              maxHeight: "260px",
+              background: "var(--bg-surface-subtle)",
+              border: "1px solid var(--border-default)",
+              borderRadius: "4px",
+              padding: "12px",
+              fontFamily: "var(--font-mono)",
+              fontSize: "11px",
+              color: "var(--text-primary)",
+              maxHeight: "240px",
               overflowY: "auto",
             }}
           >
