@@ -21,10 +21,10 @@
 | **Milestone 1** | Core Spiking Neural Network Simulator | **COMPLETED** | LIF/AdEx, 1,000 neurons, E/I Dale's principle, Brian2 validator, CLI experiment |
 | **Milestone 2** | Synaptic Plasticity & STDP | **COMPLETED** | Bi & Poo STDP (LTP/LTD), Homeostatic synaptic scaling, Hebbian learning |
 | **Milestone 3** | Associative Memory & Pattern Storage | **COMPLETED** | Recurrent attractors, partial recall (40% mask), noise recovery, Rate/Temporal/Population encoders |
-| **Milestone 4** | Experimental Engine & Benchmarks | **IN PROGRESS** | 8 Scientific experiments, CSV/JSON metrics |
-| **Milestone 5** | Ollama Local LLM Integration | PENDING | Client, model discovery, embedding generation |
-| **Milestone 6** | Hybrid AI Processing Pipeline | PENDING | Mode A / Mode B / Mode C comparison engine |
-| **Milestone 7** | 3D Neural Visualization | PENDING | Three.js WebGL canvas, interactive graph |
+| **Milestone 4** | Experimental Engine & Benchmarks | **COMPLETED** | 8 Scientific experiments, PyTorch ANN comparison, CSV/JSON metrics logging |
+| **Milestone 5** | Ollama Local LLM Integration | **COMPLETED** | Local daemon on http://127.0.0.1:11434, qwen2.5:3b-instruct, nomic-embed-text |
+| **Milestone 6** | Hybrid AI Processing Pipeline | **COMPLETED** | Mode A (LLM Only), Mode B (SNN Only), Mode C (Hybrid Co-Processing), comparison harness |
+| **Milestone 7** | 3D Neural Visualization | **IN PROGRESS** | Three.js WebGL canvas, interactive graph |
 | **Milestone 8** | Research Dashboard UI | PENDING | 9 tabs, dark neuroscience laboratory aesthetic |
 | **Milestone 9** | Validation, Documentation & Final Checkpoint | PENDING | Pytest suite, benchmark reports, README |
 
