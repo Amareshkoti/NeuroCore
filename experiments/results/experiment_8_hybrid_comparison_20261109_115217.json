@@ -1,0 +1,46 @@
+{
+  "experiment_name": "Experiment 8: Hybrid AI Comparison",
+  "timestamp": "2026-11-09T11:50:17.052039",
+  "seed": 42,
+  "hardware": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "ram_total_gb": 31.67,
+    "device": "cpu"
+  },
+  "initial_memory_mb": 260.25,
+  "config": {
+    "prompt": "Classify biological stability and cognitive adaptability."
+  },
+  "prompt": "Classify biological stability and cognitive adaptability.",
+  "mode_a_llm_only": {
+    "model": "qwen2.5:3b-instruct",
+    "latency_sec": 60.207,
+    "tokens_generated": 0,
+    "response_preview": "[Ollama local daemon unavailable: timed out]"
+  },
+  "mode_b_neural_only": {
+    "num_neurons": 500,
+    "total_spikes": 542,
+    "mean_firing_rate_hz": 27.1,
+    "matched_attractor": "Empirical_Observation",
+    "latency_sec": 1.329
+  },
+  "mode_c_hybrid": {
+    "model": "qwen2.5:3b-instruct",
+    "neural_modulation": {
+      "matched_attractor": "Empirical_Observation",
+      "attractor_overlap": 0.3861,
+      "total_spikes": 390,
+      "mean_firing_rate_hz": 26.0,
+      "synchrony_fano_factor": 3.769
+    },
+    "latency_sec": 59.34,
+    "response_preview": "Based on the biological attractor state telemetry provided, we can analyze the system's stability and adaptability in th"
+  },
+  "accuracy": 1.0,
+  "simulation_time_sec": 120.8885,
+  "final_memory_mb": 267.52,
+  "memory_delta_mb": 7.27,
+  "cpu_percent": 0.0
+}

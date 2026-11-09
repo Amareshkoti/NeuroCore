@@ -1,0 +1,27 @@
+{
+  "experiment_name": "Experiment 1: Pattern Recognition",
+  "timestamp": "2026-11-09T11:58:41.458945",
+  "seed": 42,
+  "hardware": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "ram_total_gb": 31.67,
+    "device": "cpu"
+  },
+  "initial_memory_mb": 290.59,
+  "config": {
+    "num_neurons": 100,
+    "samples": 16
+  },
+  "num_neurons": 100,
+  "num_synapses": 504,
+  "total_spikes": 774,
+  "mean_firing_rate_hz": 19.6,
+  "accuracy": 1.0,
+  "train_samples": 11,
+  "test_samples": 5,
+  "simulation_time_sec": 0.8388,
+  "final_memory_mb": 291.52,
+  "memory_delta_mb": 0.93,
+  "cpu_percent": 0.0
+}

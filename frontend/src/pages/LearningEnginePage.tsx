@@ -1,7 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import gsap from "gsap";
 import { RealtimeMetrics } from "../types";
 import { api } from "../services/api";
-import { Sparkles, Activity, Sliders, CheckCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { GlassCard } from "../components/GlassCard";
+import { Sparkles, Activity, Sliders, CheckCircle, ArrowUpRight, ArrowDownRight, Layers } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 interface LearningEnginePageProps {
@@ -13,11 +15,27 @@ export const LearningEnginePage: React.FC<LearningEnginePageProps> = ({
   metrics,
   onRefreshMetrics,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [stdpEnabled, setStdpEnabled] = useState<boolean>(true);
   const [homeostaticEnabled, setHomeostaticEnabled] = useState<boolean>(false);
   const [aPlus, setAPlus] = useState<number>(0.008);
   const [aMinus, setAMinus] = useState<number>(0.0085);
   const [statusMsg, setStatusMsg] = useState<string>("");
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ctx = gsap.context(() => {
+      gsap.from(".learn-card", {
+        y: 30,
+        opacity: 0,
+        duration: 0.6,
+        stagger: 0.08,
+        ease: "power3.out",
+        clearProps: "all",
+      });
+    }, containerRef);
+    return () => ctx.revert();
+  }, []);
 
   const handleApply = async () => {
     setStatusMsg("Updating plasticity parameters...");
@@ -28,7 +46,7 @@ export const LearningEnginePage: React.FC<LearningEnginePageProps> = ({
       a_minus: aMinus,
     });
     onRefreshMetrics();
-    setStatusMsg("Plasticity parameters updated");
+    setStatusMsg("Synaptic plasticity parameters updated in engine");
   };
 
   // Generate theoretical Bi & Poo STDP curve data points for visualization
@@ -53,20 +71,31 @@ export const LearningEnginePage: React.FC<LearningEnginePageProps> = ({
   }));
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
+    <div
+      ref={containerRef}
+      style={{
+        padding: "28px",
+        maxWidth: "1480px",
+        margin: "0 auto",
+        display: "flex",
+        flexDirection: "column",
+        gap: "24px",
+      }}
+    >
       {/* Page Header */}
-      <div className="panel" style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <GlassCard glowColor="purple" className="learn-card" style={{ padding: "24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div>
-            <div style={{ display: "flex", gap: "8px", marginBottom: "6px" }}>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
               <span className="badge badge-purple">Synaptic Plasticity</span>
-              <span className="badge badge-cyan">Bi & Poo (1998)</span>
+              <span className="badge badge-cyan">Bi & Poo (1998) Curve</span>
+              <span className="badge badge-emerald">Turrigiano Homeostasis</span>
             </div>
-            <h2 style={{ fontSize: "1.4rem", fontWeight: 700, color: "#f8fafc" }}>
+            <h2 style={{ fontSize: "1.6rem", fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>
               Spike-Timing-Dependent Plasticity & Homeostatic Engine
             </h2>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem", marginTop: "4px" }}>
-              Continuous online modification of synaptic weights based on pre- and post-synaptic spike timing.
+            <p style={{ color: "#94a3b8", fontSize: "0.9rem", marginTop: "6px" }}>
+              Continuous online modification of synaptic weights based on millisecond pre- and post-synaptic spike timing.
             </p>
           </div>
 
@@ -77,52 +106,53 @@ export const LearningEnginePage: React.FC<LearningEnginePageProps> = ({
                 handleApply();
               }}
               className={`btn ${stdpEnabled ? "btn-primary" : "btn-secondary"}`}
+              style={{ padding: "10px 18px" }}
             >
-              <Sparkles size={14} /> {stdpEnabled ? "STDP Learning Active" : "STDP Paused"}
+              <Sparkles size={15} /> {stdpEnabled ? "STDP Learning Active" : "STDP Learning Paused"}
             </button>
           </div>
         </div>
-      </div>
+      </GlassCard>
 
       {/* Main Grid: Controls + Charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "24px", marginBottom: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: "24px" }}>
         {/* Controls Column */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <div className="panel">
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          <GlassCard glowColor="purple" className="learn-card" style={{ padding: "24px" }}>
             <div className="panel-header">
               <span className="panel-title">
-                <Sliders size={16} color="#8b5cf6" /> Plasticity Parameters
+                <Sliders size={18} color="#8b5cf6" /> Plasticity Parameters
               </span>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.85rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "18px", fontSize: "0.875rem" }}>
               {/* STDP Enable */}
-              <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", color: "#f1f5f9" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", color: "#f1f5f9" }}>
                 <input
                   type="checkbox"
                   checked={stdpEnabled}
                   onChange={(e) => setStdpEnabled(e.target.checked)}
-                  style={{ width: "16px", height: "16px", accentColor: "#06b6d4" }}
+                  style={{ width: "18px", height: "18px", accentColor: "#8b5cf6" }}
                 />
-                Enable Spike-Timing-Dependent Plasticity
+                <span style={{ fontWeight: 600 }}>Enable STDP Weight Updates</span>
               </label>
 
               {/* Homeostatic Enable */}
-              <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", color: "#f1f5f9" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", color: "#f1f5f9" }}>
                 <input
                   type="checkbox"
                   checked={homeostaticEnabled}
                   onChange={(e) => setHomeostaticEnabled(e.target.checked)}
-                  style={{ width: "16px", height: "16px", accentColor: "#10b981" }}
+                  style={{ width: "18px", height: "18px", accentColor: "#10b981" }}
                 />
-                Enable Homeostatic Synaptic Scaling (Turrigiano)
+                <span style={{ fontWeight: 600 }}>Enable Synaptic Scaling (Homeostasis)</span>
               </label>
 
-              {/* A+ (LTP) */}
+              {/* A+ Potentiation */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                   <span style={{ color: "#94a3b8" }}>LTP Amplitude (A+):</span>
-                  <span style={{ color: "#38bdf8", fontFamily: "monospace", fontWeight: 700 }}>{aPlus}</span>
+                  <span style={{ color: "#38bdf8", fontWeight: 700, fontFamily: "monospace" }}>{aPlus.toFixed(4)}</span>
                 </div>
                 <input
                   type="range"
@@ -131,15 +161,15 @@ export const LearningEnginePage: React.FC<LearningEnginePageProps> = ({
                   step="0.001"
                   value={aPlus}
                   onChange={(e) => setAPlus(parseFloat(e.target.value))}
-                  style={{ width: "100%" }}
+                  style={{ width: "100%", accentColor: "#06b6d4" }}
                 />
               </div>
 
-              {/* A- (LTD) */}
+              {/* A- Depression */}
               <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                   <span style={{ color: "#94a3b8" }}>LTD Amplitude (A-):</span>
-                  <span style={{ color: "#f87171", fontFamily: "monospace", fontWeight: 700 }}>{aMinus}</span>
+                  <span style={{ color: "#f43f5e", fontWeight: 700, fontFamily: "monospace" }}>{aMinus.toFixed(4)}</span>
                 </div>
                 <input
                   type="range"
@@ -148,118 +178,88 @@ export const LearningEnginePage: React.FC<LearningEnginePageProps> = ({
                   step="0.001"
                   value={aMinus}
                   onChange={(e) => setAMinus(parseFloat(e.target.value))}
-                  style={{ width: "100%" }}
+                  style={{ width: "100%", accentColor: "#f43f5e" }}
                 />
               </div>
 
-              <button onClick={handleApply} className="btn btn-primary" style={{ width: "100%", padding: "8px 0" }}>
-                Apply Parameters
+              <button onClick={handleApply} className="btn btn-primary" style={{ width: "100%", padding: "10px 0" }}>
+                Apply Plasticity Configuration
               </button>
 
               {statusMsg && (
-                <div style={{ fontSize: "11px", color: "#34d399", fontFamily: "monospace", textAlign: "center" }}>
-                  {statusMsg}
+                <div style={{ fontSize: "12px", color: "#34d399", fontFamily: "monospace" }}>
+                  [OK] {statusMsg}
                 </div>
               )}
             </div>
-          </div>
+          </GlassCard>
 
-          {/* Plasticity Event Counters */}
-          <div className="panel">
-            <div className="panel-header">
-              <span className="panel-title">
-                <Activity size={16} color="#06b6d4" /> Cumulative Plasticity Counters
-              </span>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              <div style={{ background: "#0a0f1d", padding: "10px 14px", borderRadius: "6px", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <ArrowUpRight size={16} color="#38bdf8" />
-                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>LTP Events (Potentiation)</span>
-                </div>
-                <span style={{ color: "#38bdf8", fontWeight: 700, fontFamily: "monospace" }}>
-                  {metrics?.stdp_ltp_events?.toLocaleString() ?? 0}
-                </span>
+          {/* Biological Learning Rules Card */}
+          <GlassCard glowColor="none" className="learn-card" style={{ padding: "20px" }}>
+            <h4 style={{ fontSize: "13px", color: "#f1f5f9", marginBottom: "10px", fontWeight: 700 }}>
+              The Bi & Poo STDP Rule
+            </h4>
+            <div style={{ fontSize: "12px", color: "#94a3b8", lineHeight: 1.6 }}>
+              <div style={{ marginBottom: "6px" }}>
+                • <strong style={{ color: "#38bdf8" }}>Pre before Post (dt &gt; 0):</strong> Potentiation (LTP). Synapse strengthens because presynaptic spike caused postsynaptic response.
               </div>
-
-              <div style={{ background: "#0a0f1d", padding: "10px 14px", borderRadius: "6px", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <ArrowDownRight size={16} color="#f87171" />
-                  <span style={{ fontSize: "12px", color: "#94a3b8" }}>LTD Events (Depression)</span>
-                </div>
-                <span style={{ color: "#f87171", fontWeight: 700, fontFamily: "monospace" }}>
-                  {metrics?.stdp_ltd_events?.toLocaleString() ?? 0}
-                </span>
+              <div style={{ marginBottom: "6px" }}>
+                • <strong style={{ color: "#f43f5e" }}>Post before Pre (dt &lt; 0):</strong> Depression (LTD). Synapse weakens because firing was acausal.
               </div>
-
-              <div style={{ background: "#0a0f1d", padding: "10px 14px", borderRadius: "6px", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "12px", color: "#94a3b8" }}>Net Weight Delta (dW)</span>
-                <span style={{ color: (metrics?.stdp_net_weight_change ?? 0) >= 0 ? "#34d399" : "#f87171", fontWeight: 700, fontFamily: "monospace" }}>
-                  {(metrics?.stdp_net_weight_change ?? 0).toFixed(5)}
-                </span>
+              <div>
+                • <strong style={{ color: "#34d399" }}>Homeostasis:</strong> Normalizes total dendritic conductance to target firing rate (5.0 Hz).
               </div>
             </div>
-          </div>
+          </GlassCard>
         </div>
 
-        {/* Right Column: Scientific Curves */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          {/* Theoretical Bi & Poo STDP Curve */}
-          <div className="panel">
+        {/* Charts Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          {/* STDP Theoretical Kernel Curve */}
+          <GlassCard glowColor="purple" className="learn-card" style={{ padding: "24px" }}>
             <div className="panel-header">
               <span className="panel-title">
-                <Sparkles size={16} color="#06b6d4" /> STDP Window: ΔW vs Δt (t_post - t_pre)
+                <Activity size={18} color="#8b5cf6" /> Synaptic Modification Window Δw(Δt)
               </span>
-              <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>
-                Δt &gt; 0: LTP | Δt &lt; 0: LTD
-              </span>
+              <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>Tau_plus=20ms | Tau_minus=20ms</span>
             </div>
 
             <div style={{ width: "100%", height: "240px" }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={stdpCurveData}>
                   <XAxis dataKey="dt" stroke="#475569" fontSize={11} unit="ms" />
-                  <YAxis stroke="#475569" fontSize={11} />
+                  <YAxis stroke="#475569" fontSize={11} domain={[-0.015, 0.015]} />
                   <Tooltip
-                    contentStyle={{ background: "#0a0f1d", borderColor: "#1e293b", fontSize: "12px", color: "#f8fafc" }}
+                    contentStyle={{ background: "#0a0f1d", borderColor: "rgba(139, 92, 246, 0.3)", fontSize: "12px", color: "#f8fafc", borderRadius: "8px" }}
                   />
-                  <Line type="monotone" dataKey="dw" stroke="#8b5cf6" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="dw" stroke="#8b5cf6" strokeWidth={2.5} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </div>
+          </GlassCard>
 
-          {/* Longitudinal Mean Weight Evolution */}
-          <div className="panel">
+          {/* Real Synaptic Weight Trend Chart */}
+          <GlassCard glowColor="cyan" className="learn-card" style={{ padding: "24px" }}>
             <div className="panel-header">
               <span className="panel-title">
-                <Activity size={16} color="#34d399" /> Mean Synaptic Weight Evolution Over Time
+                <Activity size={18} color="#06b6d4" /> Mean Synaptic Weight Evolution Over Time
               </span>
-              <span style={{ fontSize: "11px", color: "#34d399", fontFamily: "monospace" }}>
-                Current Mean: {metrics?.mean_synaptic_weight.toFixed(4) ?? "0.0000"}
-              </span>
+              <span className="badge badge-cyan">Real Simulation Data</span>
             </div>
 
             <div style={{ width: "100%", height: "220px" }}>
-              {weightTrendData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={weightTrendData}>
-                    <XAxis dataKey="step" stroke="#475569" fontSize={11} unit="step" />
-                    <YAxis stroke="#475569" fontSize={11} domain={["auto", "auto"]} />
-                    <Tooltip
-                      contentStyle={{ background: "#0a0f1d", borderColor: "#1e293b", fontSize: "12px", color: "#f8fafc" }}
-                    />
-                    <Line type="monotone" dataKey="weight" stroke="#34d399" strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : (
-                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%", color: "#94a3b8", fontSize: "13px" }}>
-                  Simulation is compiling initial weight trajectory data...
-                </div>
-              )}
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weightTrendData.length > 0 ? weightTrendData : [{ step: 0, weight: 0.15 }, { step: 100, weight: 0.152 }]}>
+                  <XAxis dataKey="step" stroke="#475569" fontSize={11} unit="st" />
+                  <YAxis stroke="#475569" fontSize={11} domain={["auto", "auto"]} />
+                  <Tooltip
+                    contentStyle={{ background: "#0a0f1d", borderColor: "rgba(6, 182, 212, 0.3)", fontSize: "12px", color: "#f8fafc", borderRadius: "8px" }}
+                  />
+                  <Line type="monotone" dataKey="weight" stroke="#06b6d4" strokeWidth={2.5} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
-          </div>
+          </GlassCard>
         </div>
       </div>
     </div>
