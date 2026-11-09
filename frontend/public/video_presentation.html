@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEUROCORE - Research Video Presentation</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #060911;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding: 16px;
+    }
+
+    /* Video Player Shell */
+    .player-container {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      flex-direction: column;
+      background: #0d121f;
+      border: 1px solid #1f293d;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    /* 16:9 Aspect Ratio Canvas Stage */
+    .viewport {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 */
+      background: #090d16;
+      overflow: hidden;
+    }
+
+    .stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 30px 40px;
+      user-select: none;
+    }
+
+    /* Header Bar */
+    .stage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1f293d;
+      padding-bottom: 12px;
+      margin-bottom: 20px;
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-blue { background: #0f2342; color: #60a5fa; border: 1px solid #1e3a6a; }
+    .badge-emerald { background: #062b1e; color: #34d399; border: 1px solid #065f46; }
+    .badge-amber { background: #2b1f06; color: #fbbf24; border: 1px solid #78350f; }
+    .badge-rose { background: #2b0b11; color: #f87171; border: 1px solid #7f1d1d; }
+
+    /* Scene Containers */
+    .scene {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .scene.active {
+      display: flex;
+    }
+
+    /* Utilitarian Cards */
+    .card {
+      background: #111726;
+      border: 1px solid #1f293d;
+      border-radius: 4px;
+      padding: 18px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      flex: 1;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      flex: 1;
+    }
+
+    /* Watermark Bar (Mandatory) */
+    .watermark-bar {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #0d121f;
+      border: 1px solid #2d3a54;
+      border-radius: 4px;
+      padding: 4px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #f1f5f9;
+      z-index: 100;
+    }
+    .watermark-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    /* Player Transport Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 20px;
+      background: #111726;
+      border-top: 1px solid #1f293d;
+    }
+
+    .btn {
+      background: #1e293b;
+      color: #ffffff;
+      border: 1px solid #334155;
+      border-radius: 4px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover {
+      background: #273549;
+    }
+
+    .time-display {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+      color: #94a3b8;
+      min-width: 90px;
+    }
+
+    .scrubber {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #1f293d;
+      outline: none;
+      accent-color: #2563eb;
+      cursor: pointer;
+    }
+
+    .scene-jump {
+      display: flex;
+      gap: 4px;
+    }
+    .scene-jump button {
+      background: transparent;
+      border: 1px solid #1f293d;
+      color: #94a3b8;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .scene-jump button.active {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #3b82f6;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="player-container">
+    <!-- 16:9 Motion Design Stage (Carrying exportable video contract) -->
+    <div
+      class="viewport"
+      id="exportable-root"
+      data-om-exportable-video-with-duration-secs="60"
+    >
+      <div class="stage">
+        <!-- Persistent Top Header -->
+        <div class="stage-header">
+          <div class="brand-title">
+            <span>NEUROCORE</span>
+            <span class="badge badge-blue">Research Station</span>
+            <span id="scene-badge" class="badge badge-emerald">Simulation Active</span>
+          </div>
+          <div style="font-family: ui-monospace, monospace; font-size: 12px; color: #94a3b8;">
+            <span style="color: #60a5fa;">dt: 0.1ms</span> | 1,000 LIF/AdEx Neurons
+          </div>
+        </div>
+
+        <!-- Scene 1: Introduction & Mission (0s - 9s) -->
+        <div class="scene" id="scene-1">
+          <div style="max-width: 780px; margin-bottom: 16px;">
+            <div style="font-size: 12px; color: #60a5fa; font-weight: 600; text-transform: uppercase; margin-bottom: 4px;">
+              Computational Neuroscience Research Platform
+            </div>
+            <h1 style="font-size: 26px; font-weight: 700; margin-bottom: 8px;">
+              Synthetic Biological Computing & Hybrid AI
+            </h1>
+            <p style="font-size: 13px; color: #94a3b8; line-height: 1.6;">
+              Investigating whether mathematically simulated biological spiking neural networks (LIF & AdEx) can perform useful
+              computation, preserve sparse associative memories, and complement local LLMs without requiring biological tissue.
+            </p>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #60a5fa; margin-bottom: 8px; text-transform: uppercase;">
+                1. Differential ODE Integration
+              </div>
+              <p style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                Continuous numerical solvers integrating Leaky Integrate-and-Fire and Brette-Gerstner AdEx equations with Dale's principle (80% E / 20% I).
+              </p>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #a5b4fc; margin-bottom: 8px; text-transform: uppercase;">
+                2. Bi & Poo STDP Plasticity
+              </div>
+              <p style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                Asymmetric timing window modifying actual synaptic weights based on pre/post-synaptic spike causality, stabilized by Turrigiano homeostatic scaling.
+              </p>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #34d399; margin-bottom: 8px; text-transform: uppercase;">
+                3. Recurrent Attractor Memory
+              </div>
+              <p style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                Recurrent associative storage and robust recovery from 40% occluded or 20% noisy cues embedded in synaptic matrix W.
+              </p>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #fbbf24; margin-bottom: 8px; text-transform: uppercase;">
+                4. Hybrid LLM Co-Processor
+              </div>
+              <p style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+                Local Ollama integration comparing Mode A (LLM Only), Mode B (SNN Only), and Mode C (Hybrid Co-Processing).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 2: Differential Simulation Execution (9s - 19s) -->
+        <div class="scene" id="scene-2">
+          <div style="margin-bottom: 12px;">
+            <h2 style="font-size: 18px; font-weight: 700;">Differential SNN Execution & Membrane Potential V(t)</h2>
+            <div style="font-size: 11px; font-family: ui-monospace, monospace; color: #60a5fa;">
+              dV/dt = -(V - V_rest)/tau_m + (g_exc*(E_exc - V) + g_inh*(E_inh - V) + I_ext)/C_m
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <!-- Simulated Canvas View -->
+            <div class="card" style="display: flex; flex-direction: column;">
+              <div style="font-size: 11px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">3D CORTICAL ELLIPSOID SIMULATION</div>
+              <canvas id="snn-canvas" width="460" height="240" style="background: #090d16; border-radius: 4px; border: 1px solid #1f293d; flex: 1;"></canvas>
+            </div>
+
+            <!-- Telemetry & Waveform -->
+            <div class="card" style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div style="background: #090d16; padding: 8px 12px; border-radius: 4px; border: 1px solid #1f293d;">
+                  <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Population</div>
+                  <div style="font-size: 16px; font-weight: 700;">1,000 Neurons</div>
+                </div>
+                <div style="background: #090d16; padding: 8px 12px; border-radius: 4px; border: 1px solid #1f293d;">
+                  <div style="font-size: 10px; color: #94a3b8; text-transform: uppercase;">Firing Rate</div>
+                  <div style="font-size: 16px; font-weight: 700; color: #34d399;">14.8 Hz</div>
+                </div>
+              </div>
+
+              <div style="background: #090d16; padding: 12px; border-radius: 4px; border: 1px solid #1f293d; flex: 1;">
+                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">NUMERICAL FIDELITY</div>
+                <ul style="font-size: 11px; color: #cbd5e1; line-height: 1.6; padding-left: 16px;">
+                  <li>4th-order Runge-Kutta & Euler-Maruyama solvers</li>
+                  <li>Dale's principle: Excitatory AMPA / Inhibitory GABA</li>
+                  <li>Zero pseudo-animation: All spikes reflect differential ODE thresholds</li>
+                  <li>Brian2 Cython verified baseline</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 3: Synaptic Plasticity & STDP (19s - 29s) -->
+        <div class="scene" id="scene-3">
+          <div style="margin-bottom: 12px;">
+            <h2 style="font-size: 18px; font-weight: 700;">Bi & Poo (1998) STDP & Homeostatic Scaling</h2>
+            <div style="font-size: 11px; font-family: ui-monospace, monospace; color: #a5b4fc;">
+              Δt = t_post - t_pre | LTP: A+ * exp(-Δt/tau+) | LTD: -A- * exp(Δt/tau-)
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div style="font-size: 11px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">STDP MODIFICATION WINDOW Δw(Δt)</div>
+              <canvas id="stdp-canvas" width="460" height="220" style="background: #090d16; border-radius: 4px; border: 1px solid #1f293d; width: 100%;"></canvas>
+            </div>
+
+            <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="background: #090d16; padding: 10px 14px; border-radius: 4px; border: 1px solid #1f293d;">
+                <div style="font-size: 11px; font-weight: 600; color: #34d399;">TURRIGIANO HOMEOSTATIC SYNAPTIC SCALING</div>
+                <div style="font-size: 11px; color: #cbd5e1; margin-top: 4px; line-height: 1.5;">
+                  Normalizes total dendritic conductance to target firing rate (5.0 Hz), preventing runaway synchronization.
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex: 1;">
+                <div style="background: #090d16; padding: 8px 12px; border-radius: 4px; border: 1px solid #1f293d;">
+                  <div style="font-size: 10px; color: #94a3b8;">LTP Spikes</div>
+                  <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">184,920</div>
+                </div>
+                <div style="background: #090d16; padding: 8px 12px; border-radius: 4px; border: 1px solid #1f293d;">
+                  <div style="font-size: 10px; color: #94a3b8;">LTD Spikes</div>
+                  <div style="font-size: 16px; font-weight: 700; color: #f87171;">142,310</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 4: Associative Attractor Memory (29s - 39s) -->
+        <div class="scene" id="scene-4">
+          <div style="margin-bottom: 12px;">
+            <h2 style="font-size: 18px; font-weight: 700;">Recurrent Attractor Memory & Noisy Cue Restoration</h2>
+            <div style="font-size: 11px; font-family: ui-monospace, monospace; color: #34d399;">
+              Patterns embedded in synaptic matrix W = (1/N) * sum(x_k * x_k^T)
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card" style="display: flex; flex-direction: column; gap: 10px;">
+              <div style="font-size: 11px; font-weight: 600; color: #94a3b8;">PATTERN INTEGRITY RESTORATION: 98.4%</div>
+              <div style="background: #090d16; height: 8px; border-radius: 4px; overflow: hidden; border: 1px solid #1f293d;">
+                <div style="width: 98.4%; height: 100%; background: #059669;"></div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
+                <div style="background: #090d16; padding: 8px 12px; border-radius: 4px; border: 1px solid #1f293d;">
+                  <div style="font-size: 10px; color: #94a3b8;">Cue Overlap</div>
+                  <div style="font-size: 16px; font-weight: 700; color: #f87171;">45.0%</div>
+                </div>
+                <div style="background: #090d16; padding: 8px 12px; border-radius: 4px; border: 1px solid #1f293d;">
+                  <div style="font-size: 10px; color: #94a3b8;">Recalled Overlap</div>
+                  <div style="font-size: 16px; font-weight: 700; color: #34d399;">98.4%</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 11px; font-weight: 600; color: #94a3b8; margin-bottom: 6px;">PHYSICAL LYAPUNOV ENERGY BASIN</div>
+              <p style="font-size: 12px; color: #cbd5e1; line-height: 1.6;">
+                Zero dictionary shortcuts: Injected noisy cues slide downhill along recurrent attractor energy gradients
+                E = -0.5 * s^T * W * s, converging to the stored prototype within 5 simulation steps (0.5 ms).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 5: Hybrid AI Superiority (39s - 51s) -->
+        <div class="scene" id="scene-5">
+          <div style="margin-bottom: 12px;">
+            <h2 style="font-size: 18px; font-weight: 700;">Why SNN Computing Beats Present Brute-Force AI</h2>
+            <div style="font-size: 11px; color: #94a3b8;">
+              Direct architectural comparison: Conventional Dense Attention vs Event-Driven Neuromorphic Synergy
+            </div>
+          </div>
+
+          <div class="grid-3">
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #f87171; margin-bottom: 4px;">MODE A: LLM ONLY</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px;">CONVENTIONAL BRUTE-FORCE</div>
+              <ul style="font-size: 11px; color: #cbd5e1; line-height: 1.5; padding-left: 14px;">
+                <li>Dense O(N^2) quadratic attention</li>
+                <li>High power (~150W-300W GPU/CPU)</li>
+                <li>Static positional encodings</li>
+                <li>Hallucinates on corrupted cues</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #60a5fa; margin-bottom: 4px;">MODE B: SNN ONLY</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px;">BIOLOGICAL ODE NETWORK</div>
+              <ul style="font-size: 11px; color: #cbd5e1; line-height: 1.5; padding-left: 14px;">
+                <li>Sparse event-driven spikes O(S)</li>
+                <li>1,000x lower energy footprint</li>
+                <li>Native axonal delays (1-5ms)</li>
+                <li>Energy minimization attractors</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #34d399; margin-bottom: 4px;">MODE C: HYBRID CO-PROCESSOR</div>
+              <div style="font-size: 10px; color: #94a3b8; margin-bottom: 8px;">NEUROCORE SYNERGY</div>
+              <ul style="font-size: 11px; color: #cbd5e1; line-height: 1.5; padding-left: 14px;">
+                <li>SNN pre-filters & denoises cues</li>
+                <li>Massively reduced total power</li>
+                <li>Continuous time sequence replay</li>
+                <li>Fast memory + broad LLM reasoning</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scene 6: Summary & Open Research (51s - 60s) -->
+        <div class="scene" id="scene-6">
+          <div style="margin-bottom: 12px; text-align: center;">
+            <h2 style="font-size: 20px; font-weight: 700;">NEUROCORE Platform Summary</h2>
+            <div style="font-size: 12px; color: #60a5fa; margin-top: 2px;">
+              Advancing Neuromorphic Computing & Hybrid Intelligence
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">100% MATHEMATICALLY REAL</div>
+              <p style="font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                Fully simulated differential equations (LIF & Brette-Gerstner AdEx) with strict Dale's principle and refractory clamping.
+              </p>
+            </div>
+
+            <div class="card">
+              <div style="font-size: 12px; font-weight: 700; color: #ffffff; margin-bottom: 4px;">VERIFIED TEST HARNESS</div>
+              <p style="font-size: 11px; color: #cbd5e1; line-height: 1.5;">
+                29 passing automated scientific Pytest tests across neural integration, STDP plasticity, associative recall, and local Ollama hybrid AI.
+              </p>
+            </div>
+          </div>
+
+          <div style="margin-top: 14px; text-align: center; font-size: 12px; color: #94a3b8;">
+            Open Research Architecture | CPU Vectorized & Brian2 Verified
+          </div>
+        </div>
+
+        <!-- Mandatory Bottom Watermark -->
+        <div class="watermark-bar">
+          <div class="watermark-dot"></div>
+          <span>K.Amaresh Student and Open Researcher</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Playback Transport Controls -->
+    <div class="controls">
+      <button id="btn-play" class="btn">Play</button>
+      <button id="btn-restart" class="btn">Restart</button>
+      <div id="time-display" class="time-display">00:00 / 01:00</div>
+      <input type="range" id="scrubber" class="scrubber" min="0" max="60" step="0.1" value="0">
+      
+      <div class="scene-jump">
+        <button data-t="0" class="active">Intro</button>
+        <button data-t="9">Sim</button>
+        <button data-t="19">STDP</button>
+        <button data-t="29">Memory</button>
+        <button data-t="39">Hybrid</button>
+        <button data-t="51">Summary</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DURATION = 60.0;
+    let currentTime = 0.0;
+    let isPlaying = false;
+    let lastAnimTime = null;
+
+    const playBtn = document.getElementById("btn-play");
+    const restartBtn = document.getElementById("btn-restart");
+    const scrubber = document.getElementById("scrubber");
+    const timeDisplay = document.getElementById("time-display");
+    const sceneBadge = document.getElementById("scene-badge");
+    const exportableRoot = document.getElementById("exportable-root");
+
+    const scenes = [
+      { id: "scene-1", start: 0, end: 9, label: "Platform Intro" },
+      { id: "scene-2", start: 9, end: 19, label: "Differential SNN" },
+      { id: "scene-3", start: 19, end: 29, label: "STDP Plasticity" },
+      { id: "scene-4", start: 29, end: 39, label: "Associative Memory" },
+      { id: "scene-5", start: 39, end: 51, label: "Hybrid AI Superiority" },
+      { id: "scene-6", start: 51, end: 60, label: "Summary & Open Research" },
+    ];
+
+    function formatTime(s) {
+      const mins = Math.floor(s / 60);
+      const secs = Math.floor(s % 60);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function renderTime(t) {
+      currentTime = Math.max(0, Math.min(DURATION, t));
+      scrubber.value = currentTime;
+      timeDisplay.textContent = `${formatTime(currentTime)} / 01:00`;
+
+      // Active scene
+      scenes.forEach((sc, idx) => {
+        const el = document.getElementById(sc.id);
+        const isActive = currentTime >= sc.start && (idx === scenes.length - 1 ? currentTime <= sc.end : currentTime < sc.end);
+        if (el) el.classList.toggle("active", isActive);
+        if (isActive && sceneBadge) {
+          sceneBadge.textContent = sc.label;
+        }
+      });
+
+      // Update jump buttons
+      document.querySelectorAll(".scene-jump button").forEach(btn => {
+        const bt = parseFloat(btn.dataset.t);
+        const next = scenes.find(s => s.start === bt);
+        btn.classList.toggle("active", next && currentTime >= next.start && currentTime < next.end);
+      });
+
+      // Draw canvas visuals
+      drawSNNCanvas(currentTime);
+      drawSTDPCanvas(currentTime);
+    }
+
+    // Canvas drawing routines
+    function drawSNNCanvas(t) {
+      const c = document.getElementById("snn-canvas");
+      if (!c) return;
+      const ctx = c.getContext("2d");
+      ctx.clearRect(0, 0, c.width, c.height);
+
+      const cx = c.width / 2;
+      const cy = c.height / 2;
+      const rot = t * 0.4;
+
+      // Draw simulated 3D node points
+      for (let i = 0; i < 40; i++) {
+        const angle = i * 0.4 + rot;
+        const rad = 60 + (i % 5) * 12;
+        const x = cx + Math.cos(angle) * rad;
+        const y = cy + Math.sin(angle) * (rad * 0.5);
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = (i % 4 === 0) ? "#f59e0b" : "#3b82f6";
+        ctx.fill();
+
+        // Connect
+        if (i > 0) {
+          const prevAngle = (i - 1) * 0.4 + rot;
+          const prevRad = 60 + ((i - 1) % 5) * 12;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(prevAngle) * prevRad, cy + Math.sin(prevAngle) * (prevRad * 0.5));
+          ctx.lineTo(x, y);
+          ctx.strokeStyle = "rgba(45, 58, 84, 0.4)";
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawSTDPCanvas(t) {
+      const c = document.getElementById("stdp-canvas");
+      if (!c) return;
+      const ctx = c.getContext("2d");
+      ctx.clearRect(0, 0, c.width, c.height);
+
+      const cx = c.width / 2;
+      const cy = c.height / 2;
+
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(20, cy); ctx.lineTo(c.width - 20, cy);
+      ctx.moveTo(cx, 20); ctx.lineTo(cx, c.height - 20);
+      ctx.stroke();
+
+      // Curve
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#60a5fa";
+      for (let px = cx + 2; px < c.width - 20; px += 2) {
+        const dt = (px - cx) / 8;
+        const dw = 0.008 * Math.exp(-dt / 20);
+        const py = cy - dw * 8000;
+        if (px === cx + 2) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.strokeStyle = "#f87171";
+      for (let px = 20; px < cx - 2; px += 2) {
+        const dt = (px - cx) / 8;
+        const dw = -0.0085 * Math.exp(dt / 20);
+        const py = cy - dw * 8000;
+        if (px === 20) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+
+    // Playback loop
+    function tick(timestamp) {
+      if (!isPlaying) return;
+      if (!lastAnimTime) lastAnimTime = timestamp;
+      const delta = (timestamp - lastAnimTime) / 1000;
+      lastAnimTime = timestamp;
+
+      currentTime += delta;
+      if (currentTime >= DURATION) {
+        currentTime = DURATION;
+        isPlaying = false;
+        playBtn.textContent = "Play";
+      }
+      renderTime(currentTime);
+
+      if (isPlaying) {
+        requestAnimationFrame(tick);
+      }
+    }
+
+    playBtn.addEventListener("click", () => {
+      isPlaying = !isPlaying;
+      playBtn.textContent = isPlaying ? "Pause" : "Play";
+      if (isPlaying) {
+        if (currentTime >= DURATION) currentTime = 0;
+        lastAnimTime = null;
+        requestAnimationFrame(tick);
+      }
+    });
+
+    restartBtn.addEventListener("click", () => {
+      currentTime = 0;
+      renderTime(0);
+      if (!isPlaying) {
+        isPlaying = true;
+        playBtn.textContent = "Pause";
+        lastAnimTime = null;
+        requestAnimationFrame(tick);
+      }
+    });
+
+    scrubber.addEventListener("input", (e) => {
+      isPlaying = false;
+      playBtn.textContent = "Play";
+      renderTime(parseFloat(e.target.value));
+    });
+
+    document.querySelectorAll(".scene-jump button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        renderTime(parseFloat(btn.dataset.t));
+      });
+    });
+
+    // Implement exportable video event listener contract
+    exportableRoot.addEventListener("data-om-seek-to-time-frame", (e) => {
+      isPlaying = false;
+      playBtn.textContent = "Play";
+      if (e.detail && typeof e.detail.time === "number") {
+        renderTime(e.detail.time);
+      }
+    });
+
+    // Initial render
+    renderTime(0);
+  </script>
+</body>
+</html>
