@@ -1,0 +1,2 @@
+experiment_name,timestamp,seed,num_neurons,num_synapses,total_spikes,mean_firing_rate_hz,accuracy,simulation_time_sec,memory_rss_mb
+Experiment 2: Associative Memory,2026-11-09T13:04:27.830541,42,150,2179,15,2.0,1.0,0.7954,292.35

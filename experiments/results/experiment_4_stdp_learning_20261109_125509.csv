@@ -1,0 +1,2 @@
+experiment_name,timestamp,seed,num_neurons,num_synapses,total_spikes,mean_firing_rate_hz,accuracy,simulation_time_sec,memory_rss_mb
+Experiment 4: STDP Learning,2026-11-09T12:55:09.474707,42,250,6139,69,3.36,1.0,0.1723,243.71

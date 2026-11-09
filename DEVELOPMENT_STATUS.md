@@ -25,21 +25,22 @@
 | **Milestone 5** | Ollama Local LLM Integration | **COMPLETED** | Local daemon on http://127.0.0.1:11434, qwen2.5:3b-instruct, nomic-embed-text |
 | **Milestone 6** | Hybrid AI Processing Pipeline | **COMPLETED** | Mode A (LLM Only), Mode B (SNN Only), Mode C (Hybrid Co-Processing), comparison harness |
 | **Milestone 7** | 3D Neural Visualization | **COMPLETED** | Three.js WebGL canvas, ellipsoidal cortical volume, interactive raycasting neuron inspector |
-| **Milestone 8** | Antigravity Design UI Overhaul | **COMPLETED** | `antigravity-design-expert` skill applied: GSAP staggered motion, 3D CSS tilt, GlassCard specular highlights, luminous glow accents, 9 full research pages rebuilt & Vite bundled in 779ms |
-| **Milestone 9** | Scientific Verification & Test Suite | **COMPLETED** | 29 Pytest tests passing (100% pass rate), README.md, scripts/run_server.py |
-| **Milestone 10** | LinkedIn 60-Second Video Presentation | **IN PROGRESS** | 1080p 30FPS MP4 video rendering (`scripts/generate_linkedin_video.py`) with mandatory watermark `K.Amaresh Student and Open Researcher` |
+| **Milestone 8** | Research dashboard ("stained slide" redesign, 2026-11-09) | **COMPLETED** | Light histology-inspired UI, live spike raster on every page fed by real WebSocket spike events, 3D view recoloured per spike, hard-coded fallback charts removed, broken field mappings (memory, experiments, hybrid) fixed |
+| **Milestone 9** | Scientific Verification & Test Suite | **COMPLETED** | 32 Pytest tests passing, README.md, scripts/run_server.py |
+| **Milestone 10** | LinkedIn 60-Second Video Presentation | **COMPLETED** | `linkedin_neurocore_presentation.mp4`, 1920x1080, 30 fps, H.264. Data from `scripts/export_video_data.py` (real simulator + Ollama runs), rendered by `scripts/render_video.py` from `video/neurocore_video.html`. Watermark: K.Amaresh, Student and Open Researcher |
 
 ---
 
-## UI/UX Engineering Highlights (Antigravity Design Expert)
-- **Weightless Glass Panels**: High-translucency glassmorphism with `backdrop-filter: blur(20px)` and soft multi-layered diffused drop-shadows.
-- **Interactive 3D Mouse Tilt**: Dynamic perspective transformation (`rotateX`, `rotateY`, `translateZ(12px)`) reacting to mouse position with realistic specular edge light reflection.
-- **GSAP Staggered Choreography**: Buttery smooth entrance transitions across card grids with `power3.out` curves.
-- **Luminescent Accent System**: Cyan (AMPA/Excitatory), Crimson (GABA/Inhibitory), Violet (STDP/Plasticity), Emerald (Homeostasis/Restoration), and Gold (Active Action Potential Spikes).
+## UI Notes (stained-slide redesign)
+- **Palette**: hematoxylin violet = excitatory, eosin pink = inhibitory, ochre = action potential. Used consistently on every plot.
+- **Live raster strip**: the top of every page plots the last 250 ms of spikes. Each dot is one `[t_ms, neuron_id]` event from `spike_events` in the `/ws/simulation` packet (all 5 steps per packet, not a sample).
+- **No placeholder data**: charts show an empty state until the backend returns measurements.
+- **3D network**: edges are the strongest synapses of each presynaptic type (split by population share); dots flash for 12 ms of simulated time after a reported spike.
+- **Known findings shown honestly**: memory recall picks the right pattern at 10–40% bit flips and fails at 50%; in the video's STDP run depression dominated (505 weakened vs 45 strengthened); the hybrid mode did not produce better answers.
 
 ---
 
 ## Scientific Test Suite Status
 - **Test Modules**: 5 (`test_neural_simulator.py`, `test_plasticity.py`, `test_memory_and_encoders.py`, `test_experiments_and_ai.py`, `test_api.py`)
-- **Total Tests Passing**: 29 / 29 (100% Pass Rate)
+- **Total Tests Passing**: 32 / 32
 - **Local Ollama Daemon**: Operational on `http://127.0.0.1:11434`

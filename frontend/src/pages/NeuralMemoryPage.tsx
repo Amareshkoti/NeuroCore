@@ -1,296 +1,213 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line, Legend, Cell } from "recharts";
 import { api } from "../services/api";
-import { GlassCard } from "../components/GlassCard";
-import { Database, Play, CheckCircle } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { NoisePoint, RecallResult } from "../types";
+import { Empty, PageHead, Panel, Reading, Readings, Segmented, Slider, Status, chart, errMsg, fmt } from "../components/ui";
+
+const PATTERNS = ["Alpha", "Beta", "Gamma", "Delta"];
+
+type Recall = { result: RecallResult; original: number[]; cue: number[]; settled: number[]; pattern: string };
 
 export const NeuralMemoryPage: React.FC = () => {
-  const [selectedPattern, setSelectedPattern] = useState<string>("Alpha");
-  const [maskFraction, setMaskFraction] = useState<number>(0.3);
-  const [noiseFraction, setNoiseFraction] = useState<number>(0.15);
-  const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [recallResult, setRecallResult] = useState<any>(null);
-  const [benchmarkData, setBenchmarkData] = useState<any[]>([]);
-  const [statusMsg, setStatusMsg] = useState<string>("");
+  const [pattern, setPattern] = useState("Alpha");
+  const [mask, setMask] = useState(0.3);
+  const [noise, setNoise] = useState(0.15);
+  const [busy, setBusy] = useState(false);
+  const [stored, setStored] = useState(false);
+  const [recall, setRecall] = useState<Recall | null>(null);
+  const [sweep, setSweep] = useState<NoisePoint[]>([]);
+  const [status, setStatus] = useState({ msg: "", error: false });
 
-  const handleStore = async () => {
-    setIsProcessing(true);
-    setStatusMsg("Embedding sparse patterns into recurrent synaptic matrix W...");
+  const act = async (pending: string, fn: () => Promise<string>) => {
+    setBusy(true);
+    setStatus({ msg: pending, error: false });
     try {
-      const res = await api.storeMemoryPatterns(["Alpha", "Beta", "Gamma", "Delta"]);
-      setStatusMsg(`Stored 4 attractor prototypes (${res.meta.num_synapses_potentiated.toLocaleString()} synapses potentiated)`);
-    } catch (err) {
-      console.error(err);
-      setStatusMsg("Failed to store memory patterns");
+      setStatus({ msg: await fn(), error: false });
+    } catch (e) {
+      setStatus({ msg: `Failed: ${errMsg(e)}`, error: true });
     } finally {
-      setIsProcessing(false);
+      setBusy(false);
     }
   };
 
-  const handleRecall = async () => {
-    setIsProcessing(true);
-    setStatusMsg("Injecting cue into recurrent attractor network...");
-    try {
-      const res = await api.recallMemoryPattern({
-        pattern_name: selectedPattern,
-        noise_fraction: noiseFraction,
-        mask_fraction: maskFraction,
-      });
-      setRecallResult(res.recall_result);
-      setStatusMsg(`Recall complete: Settled into attractor '${res.recall_result.matched_label}'`);
-    } catch (err) {
-      console.error(err);
-      setStatusMsg("Recall failed");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  const store = () =>
+    act("Writing four patterns into the recurrent weights…", async () => {
+      const res = await api.storeMemoryPatterns(PATTERNS);
+      setStored(true);
+      return `Stored ${res.meta.num_patterns_stored} patterns. ${res.meta.num_synapses_potentiated.toLocaleString()} synapses were strengthened.`;
+    });
 
-  const handleRunBenchmark = async () => {
-    setIsProcessing(true);
-    setStatusMsg("Running noise tolerance sweep (10% - 50% bit flips)...");
-    try {
-      const res = await api.getNoiseBenchmark(selectedPattern);
-      setBenchmarkData(res.benchmark);
-      setStatusMsg("Noise recovery benchmark completed");
-    } catch (err) {
-      console.error(err);
-      setStatusMsg("Benchmark failed");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+  const doRecall = () =>
+    act("Presenting the cue for 25 ms, then letting the network settle for 40 ms…", async () => {
+      if (!stored) await api.storeMemoryPatterns(PATTERNS);
+      const res = await api.recallMemoryPattern({ pattern_name: pattern, noise_fraction: noise, mask_fraction: mask });
+      setStored(true);
+      setRecall({ result: res.recall_result, original: res.original, cue: res.cue, settled: res.settled_rates_hz, pattern });
+      const ok = res.recall_result.matched_label === pattern;
+      return ok
+        ? `Closest stored pattern after settling: ${pattern} (cosine ${res.recall_result.cosine_similarity.toFixed(2)}).`
+        : `Closest stored pattern after settling: ${res.recall_result.matched_label}, not ${pattern}. Try less corruption.`;
+    });
+
+  const doSweep = () =>
+    act("Recalling at 10%, 20%, 30%, 40% and 50% bit flips…", async () => {
+      if (!stored) await api.storeMemoryPatterns(PATTERNS);
+      const res = await api.getNoiseBenchmark(pattern);
+      setStored(true);
+      setSweep(res.benchmark);
+      const correct = res.benchmark.filter((p) => p.is_correct_attractor).length;
+      return `Correct attractor in ${correct} of ${res.benchmark.length} noise levels.`;
+    });
+
+  const sims = recall ? Object.entries(recall.result.all_similarities).map(([label, s]) => ({ label, s })) : [];
 
   return (
-    <div
-      style={{
-        padding: "20px 24px",
-        maxWidth: "1440px",
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-      }}
-    >
-      {/* Header Banner */}
-      <GlassCard style={{ padding: "16px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-          <div>
-            <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
-              <span className="badge badge-blue">Recurrent Attractor</span>
-              <span className="badge badge-emerald">Hebbian Matrix W</span>
+    <>
+      <PageHead
+        title="Memory"
+        intro="Patterns are written into the recurrent synaptic weights, not into a lookup table. A damaged cue is presented to the network and its own dynamics pull activity back toward the nearest stored pattern."
+      >
+        <button className="btn primary" disabled={busy} onClick={store}>
+          {stored ? "Store patterns again" : "Store four patterns"}
+        </button>
+      </PageHead>
+
+      <div className="grid side-l">
+        <div className="grid" style={{ alignContent: "start" }}>
+          <Panel title="Cue">
+            <div className="field">
+              <span>Pattern to recall</span>
+              <Segmented label="Pattern" value={pattern} onChange={setPattern} options={PATTERNS.map((p) => ({ value: p, label: p }))} />
             </div>
-            <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-primary)" }}>
-              Associative Neural Memory & Pattern Recovery
-            </h2>
-            <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
-              Patterns are stored directly in recurrent synaptic weights. Corrupted or occluded cues settle into attractor energy basins.
-            </p>
-          </div>
-
-          <button onClick={handleStore} disabled={isProcessing} className="btn btn-primary">
-            <Database size={14} /> Store 4 Prototypes
-          </button>
-        </div>
-      </GlassCard>
-
-      {/* Grid: Setup & Results */}
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "16px" }}>
-        {/* Left Column: Query Setup */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                <Database size={15} /> Retrieval Setup
-              </span>
+            <Slider label="Hide part of the cue" value={mask} display={`${Math.round(mask * 100)}%`} min={0} max={0.8} step={0.05} onChange={setMask} />
+            <Slider label="Flip random bits" value={noise} display={`${Math.round(noise * 100)}%`} min={0} max={0.5} step={0.05} onChange={setNoise} />
+            <div className="row">
+              <button className="btn primary" style={{ flex: 1 }} disabled={busy} onClick={doRecall}>
+                Recall
+              </button>
+              <button className="btn" style={{ flex: 1 }} disabled={busy} onClick={doSweep}>
+                Noise sweep
+              </button>
             </div>
+            <Status {...status} />
+          </Panel>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
-                  Memory Target
-                </label>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                  {["Alpha", "Beta", "Gamma", "Delta"].map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => setSelectedPattern(name)}
-                      className={`btn ${selectedPattern === name ? "btn-primary" : "btn-secondary"}`}
-                      style={{ padding: "6px 0", fontSize: "12px" }}
-                    >
-                      {name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span style={{ color: "var(--text-secondary)" }}>Occlusion / Masking:</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                    {Math.round(maskFraction * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="0.8"
-                  step="0.05"
-                  value={maskFraction}
-                  onChange={(e) => setMaskFraction(parseFloat(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span style={{ color: "var(--text-secondary)" }}>Bit-Flip Gaussian Noise:</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-                    {Math.round(noiseFraction * 100)}%
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0.0"
-                  max="0.5"
-                  step="0.05"
-                  value={noiseFraction}
-                  onChange={(e) => setNoiseFraction(parseFloat(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  onClick={handleRecall}
-                  disabled={isProcessing}
-                  className="btn btn-primary"
-                  style={{ flex: 1 }}
-                >
-                  <Play size={14} /> Recall Dynamic
-                </button>
-
-                <button
-                  onClick={handleRunBenchmark}
-                  disabled={isProcessing}
-                  className="btn btn-secondary"
-                  style={{ flex: 1 }}
-                >
-                  Noise Sweep
-                </button>
-              </div>
-
-              {statusMsg && (
-                <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--accent-blue)" }}>
-                  [{statusMsg}]
-                </div>
-              )}
+          <Panel title="Why this counts as memory">
+            <div className="prose">
+              <p>Storing uses a Hebbian outer product: neurons active together in a pattern get stronger mutual excitation.</p>
+              <div className="eq">W ← W + η (p pᵀ)</div>
+              <p>Recall runs the spiking network. The answer is read from the firing rates it settles into, compared with each stored pattern by cosine similarity.</p>
             </div>
-          </GlassCard>
-
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">Attractor Dynamics</span>
-            </div>
-            <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-              In NEUROCORE, memory is not a key-value database lookup. It is an emergent energy minimum in the recurrent phase space.
-              Injected noisy cues descend Lyapunov energy basins E = -0.5 * s^T * W * s until settling into the prototype.
-            </p>
-          </GlassCard>
+          </Panel>
         </div>
 
-        {/* Right Column: Recall Results & Benchmarks */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                <CheckCircle size={15} /> Attractor Recall Outcome
-              </span>
-              {recallResult && (
-                <span className={`badge ${recallResult.matched_label === selectedPattern ? "badge-emerald" : "badge-amber"}`}>
-                  {recallResult.matched_label === selectedPattern ? "Attractor Converged" : "Diverged"}
+        <div className="grid" style={{ alignContent: "start" }}>
+          <Panel
+            title="Recall"
+            aside={
+              recall ? (
+                <span className={`tag ${recall.result.matched_label === recall.pattern ? "ok" : "inh"}`}>
+                  {recall.result.matched_label === recall.pattern ? `Closest match: ${recall.pattern}` : `Closest match: ${recall.result.matched_label}`}
                 </span>
-              )}
-            </div>
-
-            {recallResult ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-                  <div className="stat-card">
-                    <div className="stat-label">Cue Overlap</div>
-                    <div className="stat-val">{(recallResult.input_overlap_with_original * 100).toFixed(1)}%</div>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-label">Final Overlap</div>
-                    <div className="stat-val" style={{ color: "var(--accent-emerald)" }}>
-                      {(recallResult.recalled_overlap_with_original * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-label">Bit Recovery</div>
-                    <div className="stat-val">
-                      {((recallResult.recalled_overlap_with_original - recallResult.input_overlap_with_original) * 100).toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="stat-card">
-                    <div className="stat-label">Settling Steps</div>
-                    <div className="stat-val">{recallResult.settling_steps} ({recallResult.settling_time_ms}ms)</div>
-                  </div>
+              ) : undefined
+            }
+          >
+            {recall ? (
+              <>
+                <div className="grid cols-3" style={{ gap: 14, marginBottom: 16 }}>
+                  <PatternGrid title="Stored pattern" values={recall.original} color="#231a3d" />
+                  <PatternGrid title="Cue given to the network" values={recall.cue} color="#c42f63" diff={recall.original} />
+                  <PatternGrid title="Settled firing" values={recall.settled} color="#4a3aa8" />
                 </div>
-
-                <div style={{ background: "var(--bg-surface-subtle)", padding: "12px", borderRadius: "4px", border: "1px solid var(--border-muted)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "12px" }}>
-                    <span style={{ color: "var(--text-secondary)" }}>Pattern Integrity Restoration</span>
-                    <span style={{ fontWeight: 600 }}>{Math.round(recallResult.recalled_overlap_with_original * 100)}% Restored</span>
-                  </div>
-                  <div style={{ width: "100%", height: "6px", background: "var(--border-default)", borderRadius: "3px", overflow: "hidden" }}>
-                    <div
-                      style={{
-                        width: `${Math.round(recallResult.recalled_overlap_with_original * 100)}%`,
-                        height: "100%",
-                        background: "var(--accent-emerald)",
-                      }}
-                    />
-                  </div>
+                <Readings>
+                  <Reading label="Cosine similarity" value={fmt(recall.result.cosine_similarity, 3)} />
+                  <Reading label="Hamming similarity" value={fmt(recall.result.hamming_similarity, 3)} />
+                  <Reading label="Settled rate" value={fmt(recall.result.settled_firing_rate_hz)} unit="Hz" />
+                  <Reading label="Spikes used" value={recall.result.total_settling_spikes.toLocaleString()} />
+                </Readings>
+                <div className="figure" style={{ height: 170, marginTop: 16 }}>
+                  <ResponsiveContainer>
+                    <BarChart data={sims} layout="vertical" margin={{ top: 6, right: 20, left: 10, bottom: 0 }}>
+                      <CartesianGrid stroke={chart.grid} horizontal={false} />
+                      <XAxis type="number" {...chart.axis} domain={[0, 1]} />
+                      <YAxis type="category" dataKey="label" {...chart.axis} width={60} />
+                      <Tooltip {...chart.tooltip} formatter={(v) => Number(v).toFixed(3)} />
+                      <Bar dataKey="s" name="Similarity" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+                        {sims.map((d) => (
+                          <Cell key={d.label} fill={d.label === recall.result.matched_label ? chart.exc : "#cfc6dd"} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
+                <p className="caption">Similarity of the settled firing to every stored pattern. The highest one is the network's answer.</p>
+              </>
+            ) : (
+              <Empty>Pick a pattern, damage the cue, then press Recall. Patterns are stored automatically the first time.</Empty>
+            )}
+          </Panel>
+
+          <Panel title="Noise sweep" aside={sweep.length ? `Pattern ${pattern}` : undefined}>
+            {sweep.length ? (
+              <div className="figure" style={{ height: 240 }}>
+                <ResponsiveContainer>
+                  <LineChart data={sweep.map((p) => ({ ...p, pct: `${Math.round(p.noise_fraction * 100)}%` }))} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={chart.grid} vertical={false} />
+                    <XAxis dataKey="pct" {...chart.axis} />
+                    <YAxis {...chart.axis} domain={[0, 1]} width={44} />
+                    <Tooltip {...chart.tooltip} formatter={(v) => Number(v).toFixed(3)} />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Line dataKey="input_cue_similarity" name="Cue vs stored" stroke={chart.inh} strokeWidth={2} isAnimationActive={false} />
+                    <Line dataKey="recovered_similarity" name="Settled vs stored" stroke={chart.exc} strokeWidth={2} isAnimationActive={false} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             ) : (
-              <div style={{ textAlign: "center", padding: "30px", color: "var(--text-muted)", fontSize: "13px" }}>
-                Select a target pattern and click "Recall Dynamic" to evaluate cue reconstruction.
-              </div>
+              <Empty>Run a noise sweep to measure how much corruption the network can repair.</Empty>
             )}
-          </GlassCard>
-
-          {/* Noise Sweep Chart */}
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                Noise Resistance Sweep (Bit-Flip Resilience)
-              </span>
-              <span className="badge badge-neutral">Parametric Sweep</span>
-            </div>
-
-            <div style={{ width: "100%", height: "200px" }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={benchmarkData.length > 0 ? benchmarkData : [
-                  { noise: "10%", final_overlap: 0.98 },
-                  { noise: "20%", final_overlap: 0.94 },
-                  { noise: "30%", final_overlap: 0.88 },
-                  { noise: "40%", final_overlap: 0.76 },
-                  { noise: "50%", final_overlap: 0.58 },
-                ]}>
-                  <XAxis dataKey="noise" stroke="#475569" fontSize={11} />
-                  <YAxis domain={[0, 1.0]} stroke="#475569" fontSize={11} />
-                  <Tooltip
-                    contentStyle={{ background: "#0d121f", borderColor: "#1f293d", fontSize: "12px", color: "#f8fafc", borderRadius: "4px" }}
-                  />
-                  <Bar dataKey="final_overlap" fill="#4f46e5" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </GlassCard>
+          </Panel>
         </div>
       </div>
-    </div>
+    </>
+  );
+};
+
+// One square per neuron. For the cue, cells that differ from the stored pattern get an outline.
+const PatternGrid: React.FC<{ title: string; values: number[]; color: string; diff?: number[] }> = ({ title, values, color, diff }) => {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current;
+    if (!c || !values.length) return;
+    const cols = Math.ceil(Math.sqrt(values.length));
+    const rows = Math.ceil(values.length / cols);
+    const cell = 10;
+    c.width = cols * cell;
+    c.height = rows * cell;
+    const g = c.getContext("2d")!;
+    g.fillStyle = "#f4eff4";
+    g.fillRect(0, 0, c.width, c.height);
+    const max = Math.max(...values, 1e-6);
+    values.forEach((v, i) => {
+      const x = (i % cols) * cell;
+      const y = Math.floor(i / cols) * cell;
+      const a = Math.min(1, v / max);
+      if (a > 0.02) {
+        g.globalAlpha = 0.15 + 0.85 * a;
+        g.fillStyle = color;
+        g.fillRect(x + 1, y + 1, cell - 2, cell - 2);
+        g.globalAlpha = 1;
+      }
+      if (diff && Math.round(diff[i]) !== Math.round(v)) {
+        g.strokeStyle = "#d99a06";
+        g.lineWidth = 1.5;
+        g.strokeRect(x + 1.5, y + 1.5, cell - 3, cell - 3);
+      }
+    });
+  }, [values, color, diff]);
+  return (
+    <figure>
+      <canvas ref={ref} style={{ width: "100%", imageRendering: "pixelated", borderRadius: 6, display: "block" }} />
+      <figcaption className="caption">{title}</figcaption>
+    </figure>
   );
 };

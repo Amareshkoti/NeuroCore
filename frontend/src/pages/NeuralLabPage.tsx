@@ -1,323 +1,220 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Play, Pause, RotateCcw, StepForward, Zap } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from "recharts";
 import { RealtimeMetrics } from "../types";
 import { api } from "../services/api";
-import { GlassCard } from "../components/GlassCard";
-import { Play, Pause, RotateCcw, FastForward, Zap, Sliders, Activity, Layers } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { loadDefaults } from "../services/settings";
+import { LiveRaster } from "../components/LiveRaster";
+import { PageHead, Panel, Reading, Readings, Segmented, Slider, Status, chart, errMsg, fmt } from "../components/ui";
 
-interface NeuralLabPageProps {
+interface Props {
   metrics: RealtimeMetrics | null;
   isRunning: boolean;
   onRefreshMetrics: () => void;
-  onNavigateTo3D: () => void;
+  onNetworkRebuilt: () => void;
 }
 
-export const NeuralLabPage: React.FC<NeuralLabPageProps> = ({
-  metrics,
-  isRunning,
-  onRefreshMetrics,
-  onNavigateTo3D,
-}) => {
-  const [numNeurons, setNumNeurons] = useState<number>(1000);
-  const [modelType, setModelType] = useState<string>("lif");
-  const [stimAmplitude, setStimAmplitude] = useState<number>(2.5);
-  const [targetCluster, setTargetCluster] = useState<string>("sensory");
-  const [statusMsg, setStatusMsg] = useState<string>("");
-  const [vHistory, setVHistory] = useState<{ t: number; v: number; rate: number }[]>([]);
+type Sample = { t: number; v: number; rate: number; spikes: number };
+
+export const NeuralLabPage: React.FC<Props> = ({ metrics, isRunning, onRefreshMetrics, onNetworkRebuilt }) => {
+  const defaults = loadDefaults();
+  const [numNeurons, setNumNeurons] = useState(defaults.numNeurons);
+  const [modelType, setModelType] = useState<"lif" | "adex">(defaults.modelType);
+  const [amplitude, setAmplitude] = useState(2.5);
+  const [target, setTarget] = useState("sensory");
+  const [status, setStatus] = useState({ msg: "", error: false });
+  const [history, setHistory] = useState<Sample[]>([]);
 
   useEffect(() => {
-    if (metrics) {
-      setVHistory((prev) => {
-        const next = [
-          ...prev,
-          {
-            t: Math.round(metrics.current_time_ms),
-            v: metrics.mean_membrane_potential_mv,
-            rate: metrics.mean_firing_rate_hz,
-          },
-        ];
-        return next.length > 50 ? next.slice(next.length - 50) : next;
-      });
-    }
+    if (!metrics) return;
+    setHistory((prev) => {
+      if (prev.length && metrics.current_time_ms < prev[prev.length - 1].t) return []; // reset
+      if (prev.length && metrics.current_time_ms === prev[prev.length - 1].t) return prev;
+      const next = [
+        ...prev,
+        {
+          t: metrics.current_time_ms,
+          v: metrics.mean_membrane_potential_mv,
+          rate: metrics.mean_firing_rate_hz,
+          spikes: metrics.active_spikes_current_step,
+        },
+      ];
+      return next.length > 240 ? next.slice(-240) : next;
+    });
   }, [metrics]);
 
-  const handleStart = async () => {
-    await api.startSimulation();
-    setStatusMsg("Simulation running");
+  const run = async (label: string, fn: () => Promise<unknown>) => {
+    try {
+      await fn();
+      setStatus({ msg: label, error: false });
+    } catch (e) {
+      setStatus({ msg: `Request failed: ${errMsg(e)}`, error: true });
+    }
   };
 
-  const handlePause = async () => {
-    await api.pauseSimulation();
-    setStatusMsg("Simulation paused");
-  };
-
-  const handleStep = async () => {
-    await api.stepSimulation(5);
-    onRefreshMetrics();
-    setStatusMsg("Stepped 5 biological steps (0.5 ms dt)");
-  };
-
-  const handleReset = async () => {
-    await api.resetSimulation();
-    setVHistory([]);
-    onRefreshMetrics();
-    setStatusMsg("Membrane potentials reset to rest (-65.0 mV)");
-  };
-
-  const handleCreate = async () => {
-    setStatusMsg(`Reconfiguring network to ${numNeurons} neurons (${modelType.toUpperCase()})...`);
-    await api.createSimulation({
-      num_neurons: numNeurons,
-      model_type: modelType,
-      excitatory_ratio: 0.8,
-      connection_probability: 0.03,
-      seed: 42,
+  const rebuild = () =>
+    run(`Built ${numNeurons.toLocaleString()} ${modelType.toUpperCase()} neurons with seed ${defaults.seed}.`, async () => {
+      setStatus({ msg: "Building network…", error: false });
+      await api.createSimulation({
+        num_neurons: numNeurons,
+        model_type: modelType,
+        excitatory_ratio: defaults.excitatoryRatio,
+        connection_probability: defaults.connectionProbability,
+        seed: defaults.seed,
+      });
+      setHistory([]);
+      onNetworkRebuilt();
     });
-    setVHistory([]);
-    onRefreshMetrics();
-    setStatusMsg(`Initialized ${numNeurons} neurons (${modelType.toUpperCase()})`);
-  };
 
-  const handleInject = async () => {
-    await api.injectCurrent(targetCluster, stimAmplitude, 20.0);
-    setStatusMsg(`Injected ${stimAmplitude} nA somatic pulse into ${targetCluster} cluster`);
+  const targetLabel: Record<string, string> = {
+    sensory: "the sensory group (first 15% of neurons)",
+    inhibitory: "every inhibitory neuron",
+    all: "every neuron",
   };
 
   return (
-    <div
-      style={{
-        padding: "20px 24px",
-        maxWidth: "1440px",
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-      }}
-    >
-      {/* Control Strip */}
-      <GlassCard style={{ padding: "12px 18px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            {!isRunning ? (
-              <button onClick={handleStart} className="btn btn-success">
-                <Play size={14} /> Run Simulation
-              </button>
-            ) : (
-              <button onClick={handlePause} className="btn btn-danger">
-                <Pause size={14} /> Pause
-              </button>
-            )}
+    <>
+      <PageHead
+        title="Neural lab"
+        intro="Build a network, drive it with current and watch how it responds. Readings update from the simulator about 25 times a second."
+      >
+        {isRunning ? (
+          <button className="btn stop" onClick={() => run("Paused.", api.pauseSimulation)}>
+            <Pause size={15} /> Pause
+          </button>
+        ) : (
+          <button className="btn run" onClick={() => run("Running.", api.startSimulation)}>
+            <Play size={15} /> Run
+          </button>
+        )}
+        <button
+          className="btn"
+          onClick={() =>
+            run("Advanced 0.5 ms (5 steps).", async () => {
+              await api.stepSimulation(5);
+              onRefreshMetrics();
+            })
+          }
+        >
+          <StepForward size={15} /> Step 0.5 ms
+        </button>
+        <button
+          className="btn"
+          onClick={() =>
+            run("Reset all membranes to rest at −65 mV.", async () => {
+              await api.resetSimulation();
+              setHistory([]);
+              onNetworkRebuilt();
+            })
+          }
+        >
+          <RotateCcw size={15} /> Reset
+        </button>
+      </PageHead>
 
-            <button onClick={handleStep} className="btn btn-secondary">
-              <FastForward size={14} /> Step (0.5ms)
+      <div className="grid side-l">
+        <div className="grid" style={{ alignContent: "start" }}>
+          <Panel title="Network">
+            <div className="field">
+              <span>Neurons</span>
+              <Segmented
+                label="Network size"
+                value={numNeurons}
+                onChange={setNumNeurons}
+                options={[200, 500, 1000, 2000].map((n) => ({ value: n, label: n.toLocaleString() }))}
+              />
+            </div>
+            <div className="field">
+              <span>Neuron model</span>
+              <Segmented
+                label="Neuron model"
+                value={modelType}
+                onChange={setModelType}
+                options={[
+                  { value: "lif", label: "Leaky integrate-and-fire" },
+                  { value: "adex", label: "Adaptive exponential" },
+                ]}
+              />
+            </div>
+            <p className="prose" style={{ fontSize: 13, marginBottom: 14 }}>
+              {Math.round(defaults.excitatoryRatio * 100)}% excitatory, {Math.round((1 - defaults.excitatoryRatio) * 100)}%
+              inhibitory, {Math.round(defaults.connectionProbability * 100)}% connection probability, 2 ms refractory period,
+              1–5 ms synaptic delays. Change the defaults under Settings.
+            </p>
+            <button className="btn primary block" onClick={rebuild}>
+              Build network
             </button>
+          </Panel>
 
-            <button onClick={handleReset} className="btn btn-secondary">
-              <RotateCcw size={14} /> Reset
+          <Panel title="Stimulate">
+            <div className="field">
+              <span>Target</span>
+              <select value={target} onChange={(e) => setTarget(e.target.value)}>
+                <option value="sensory">Sensory group, first 15%</option>
+                <option value="inhibitory">Inhibitory neurons</option>
+                <option value="all">Whole network</option>
+              </select>
+            </div>
+            <Slider label="Current" value={amplitude} display={`${amplitude.toFixed(1)} nA`} min={0.5} max={5} step={0.1} onChange={setAmplitude} />
+            <button
+              className="btn primary block"
+              onClick={() => run(`Injected ${amplitude.toFixed(1)} nA into ${targetLabel[target]}.`, () => api.injectCurrent(target, amplitude, 20))}
+            >
+              <Zap size={15} /> Inject current
             </button>
-
-            <button onClick={onNavigateTo3D} className="btn btn-secondary">
-              <Layers size={14} /> View 3D Space
-            </button>
-          </div>
-
-          {statusMsg && (
-            <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--accent-blue)" }}>
-              [{statusMsg}]
-            </div>
-          )}
-        </div>
-      </GlassCard>
-
-      {/* Grid: Controls & Charts */}
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: "16px" }}>
-        {/* Left Column: Sizing & Injection */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Topology Configuration */}
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                <Sliders size={15} /> Topology Configuration
-              </span>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
-                  Network Size ({numNeurons} Neurons)
-                </label>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  {[200, 500, 1000, 2000].map((sz) => (
-                    <button
-                      key={sz}
-                      onClick={() => setNumNeurons(sz)}
-                      className={`btn ${numNeurons === sz ? "btn-primary" : "btn-secondary"}`}
-                      style={{ flex: 1, padding: "5px 0", fontSize: "12px" }}
-                    >
-                      {sz}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
-                  Neuron Differential ODE Model
-                </label>
-                <select
-                  value={modelType}
-                  onChange={(e) => setModelType(e.target.value)}
-                  style={{ width: "100%" }}
-                >
-                  <option value="lif">Leaky Integrate-and-Fire (LIF)</option>
-                  <option value="adex">Adaptive Exponential (AdEx - Brette & Gerstner)</option>
-                </select>
-              </div>
-
-              <div
-                style={{
-                  fontSize: "11px",
-                  color: "var(--text-secondary)",
-                  background: "var(--bg-surface-subtle)",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border-muted)",
-                  lineHeight: 1.6,
-                }}
-              >
-                <div>• Excitatory Pyramidal: 80% (AMPA kinetics, tau=5.0ms)</div>
-                <div>• Inhibitory Interneurons: 20% (GABA kinetics, tau=10.0ms)</div>
-                <div>• Refractory period: 2.0ms clamping</div>
-              </div>
-
-              <button onClick={handleCreate} className="btn btn-secondary" style={{ width: "100%" }}>
-                Rebuild Network
-              </button>
-            </div>
-          </GlassCard>
-
-          {/* Sensory Current Injection */}
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                <Zap size={15} /> Sensory Stimulation Injection
-              </span>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
-                  Target Population Cluster
-                </label>
-                <select
-                  value={targetCluster}
-                  onChange={(e) => setTargetCluster(e.target.value)}
-                  style={{ width: "100%" }}
-                >
-                  <option value="sensory">Sensory Afferents (0-15% Cluster)</option>
-                  <option value="inhibitory">Inhibitory Pool (Interneurons)</option>
-                  <option value="all">Diffuse Cortical Drive (All Neurons)</option>
-                </select>
-              </div>
-
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                  <span style={{ color: "var(--text-secondary)" }}>Current Amplitude:</span>
-                  <span style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}>{stimAmplitude} nA</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="5.0"
-                  step="0.1"
-                  value={stimAmplitude}
-                  onChange={(e) => setStimAmplitude(parseFloat(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <button onClick={handleInject} className="btn btn-primary" style={{ width: "100%" }}>
-                <Zap size={14} /> Inject Stimulation Pulse
-              </button>
-            </div>
-          </GlassCard>
+            <Status {...status} />
+          </Panel>
         </div>
 
-        {/* Right Column: Charts & Telemetry */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {/* Stat Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px" }}>
-            <div className="stat-card">
-              <div className="stat-label">Active Spikes</div>
-              <div className="stat-val">{metrics?.active_spikes_current_step ?? 0}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Mean Membrane V</div>
-              <div className="stat-val">{metrics?.mean_membrane_potential_mv.toFixed(1) ?? "-65.0"} mV</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Firing Rate</div>
-              <div className="stat-val">{metrics?.mean_firing_rate_hz.toFixed(1) ?? "0.0"} Hz</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Synchrony (Fano)</div>
-              <div className="stat-val">{metrics?.synchrony_fano_factor.toFixed(2) ?? "1.00"}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Total Spikes</div>
-              <div className="stat-val">{metrics?.total_spikes.toLocaleString() ?? 0}</div>
-            </div>
-          </div>
+        <div className="grid" style={{ alignContent: "start" }}>
+          <Panel>
+            <Readings>
+              <Reading label="Spiking this step" value={metrics?.active_spikes_current_step ?? "–"} color="var(--spike)" />
+              <Reading label="Mean membrane" value={fmt(metrics?.mean_membrane_potential_mv)} unit="mV" />
+              <Reading label="Spread" value={fmt(metrics?.std_membrane_potential_mv)} unit="mV" />
+              <Reading label="Mean rate" value={fmt(metrics?.mean_firing_rate_hz)} unit="Hz" />
+              <Reading label="Peak rate" value={fmt(metrics?.max_firing_rate_hz, 0)} unit="Hz" />
+              <Reading label="Fano factor" value={fmt(metrics?.synchrony_fano_factor, 2)} />
+            </Readings>
+          </Panel>
 
-          {/* Oscilloscope Chart */}
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                <Activity size={15} /> Population Mean Membrane Potential V(t)
-              </span>
-              <span style={{ fontSize: "11px", color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
-                Rest: -65.0mV | Threshold: -50.0mV
-              </span>
+          <Panel title="Spike raster" aside="Each dot is one spike. Excitatory rows above the dashed line.">
+            <div className="figure" style={{ padding: 0 }}>
+              <LiveRaster className="strip-canvas" height={220} isRunning={isRunning} />
             </div>
+          </Panel>
 
-            <div style={{ width: "100%", height: "240px" }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={vHistory}>
-                  <XAxis dataKey="t" stroke="#475569" fontSize={11} unit="ms" />
-                  <YAxis domain={[-75, -45]} stroke="#475569" fontSize={11} unit="mV" />
-                  <Tooltip
-                    contentStyle={{ background: "#0d121f", borderColor: "#1f293d", fontSize: "12px", color: "#f8fafc", borderRadius: "4px" }}
-                  />
-                  <Line type="monotone" dataKey="v" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+          <Panel title="Mean membrane potential" aside="Threshold −50 mV, rest −65 mV">
+            <div className="figure" style={{ height: 230 }}>
+              <ResponsiveContainer>
+                <LineChart data={history} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={chart.grid} vertical={false} />
+                  <XAxis dataKey="t" {...chart.axis} type="number" domain={["dataMin", "dataMax"]} tickFormatter={(t) => `${Math.round(t)}`} unit=" ms" />
+                  <YAxis {...chart.axis} domain={[-72, -48]} unit=" mV" width={66} />
+                  <ReferenceLine y={-50} stroke={chart.spike} strokeDasharray="4 4" />
+                  <ReferenceLine y={-65} stroke={chart.grid} />
+                  <Tooltip {...chart.tooltip} formatter={(v) => `${Number(v).toFixed(2)} mV`} labelFormatter={(t) => `${Number(t).toFixed(1)} ms`} />
+                  <Line dataKey="v" stroke={chart.exc} strokeWidth={2} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+          </Panel>
 
-          {/* Firing Rate History Chart */}
-          <GlassCard>
-            <div className="panel-header">
-              <span className="panel-title">
-                <Activity size={15} /> Firing Rate History (Hz)
-              </span>
-              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>100ms Rolling Average</span>
-            </div>
-
-            <div style={{ width: "100%", height: "160px" }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={vHistory}>
-                  <XAxis dataKey="t" stroke="#475569" fontSize={11} unit="ms" />
-                  <YAxis stroke="#475569" fontSize={11} unit="Hz" />
-                  <Tooltip
-                    contentStyle={{ background: "#0d121f", borderColor: "#1f293d", fontSize: "12px", color: "#f8fafc", borderRadius: "4px" }}
-                  />
-                  <Line type="monotone" dataKey="rate" stroke="#10b981" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+          <Panel title="Population firing rate" aside="Rolling window estimate from the simulator">
+            <div className="figure" style={{ height: 180 }}>
+              <ResponsiveContainer>
+                <LineChart data={history} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={chart.grid} vertical={false} />
+                  <XAxis dataKey="t" {...chart.axis} type="number" domain={["dataMin", "dataMax"]} tickFormatter={(t) => `${Math.round(t)}`} unit=" ms" />
+                  <YAxis {...chart.axis} unit=" Hz" width={66} />
+                  <Tooltip {...chart.tooltip} formatter={(v) => `${Number(v).toFixed(2)} Hz`} labelFormatter={(t) => `${Number(t).toFixed(1)} ms`} />
+                  <Line dataKey="rate" stroke={chart.inh} strokeWidth={2} dot={false} isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+          </Panel>
         </div>
       </div>
-    </div>
+    </>
   );
 };

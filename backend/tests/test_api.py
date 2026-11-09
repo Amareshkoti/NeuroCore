@@ -72,3 +72,41 @@ def test_api_ai_mode_b_neural_only():
     data = res.json()
     assert data["mode"] == "MODE_B_NEURAL_ONLY"
     assert data["total_spikes"] > 0
+
+
+def test_api_network_edges_sample_both_populations():
+    # inhibitory weights are larger, so a global top-k would contain only inhibitory synapses
+    client.post("/api/simulation/create", json={"num_neurons": 300, "model_type": "lif", "seed": 42})
+    edges = client.get("/api/neural/network?max_edges=200").json()["edges"]
+    assert len(edges) == 200
+    n_exc = sum(e["is_exc"] for e in edges)
+    assert 0 < n_exc < 200
+
+
+def test_api_memory_recall_returns_vectors():
+    client.post("/api/memory/store", json={"pattern_names": ["Alpha", "Beta"]})
+    res = client.post("/api/memory/recall", json={"pattern_name": "Alpha", "noise_fraction": 0.1, "mask_fraction": 0.2})
+    assert res.status_code == 200
+    data = res.json()
+    n = len(data["original"])
+    assert len(data["cue"]) == n and len(data["settled_rates_hz"]) == n
+    # settled rates come from the simulation run, so they cannot all be zero after a cue
+    assert any(r > 0 for r in data["settled_rates_hz"])
+
+
+def test_websocket_streams_spike_events():
+    client.post("/api/simulation/create", json={"num_neurons": 200, "model_type": "lif", "seed": 1})
+    client.post("/api/simulation/inject", json={"target_cluster": "all", "amplitude_na": 3.0})
+    client.post("/api/simulation/start")
+    try:
+        with client.websocket_connect("/ws/simulation") as ws:
+            events = []
+            for _ in range(40):
+                packet = ws.receive_json()
+                events.extend(packet["spike_events"])
+            assert events, "driven network should report spikes"
+            assert all(0 <= nid < 200 for _, nid in events)
+            times = [t for t, _ in events]
+            assert times == sorted(times)
+    finally:
+        client.post("/api/simulation/pause")

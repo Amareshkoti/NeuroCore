@@ -4,158 +4,105 @@ import {
   NetworkVisualizationPayload,
   AIProcessResult,
   AIComparisonResult,
+  RecallResult,
+  NoisePoint,
+  ExperimentSummary,
+  LivePacket,
 } from "../types";
 
-const API_BASE = "http://127.0.0.1:8000/api";
-const WS_BASE = "ws://127.0.0.1:8000/ws";
+const HOST = import.meta.env.VITE_API_HOST ?? "127.0.0.1:8000";
+const API_BASE = `http://${HOST}/api`;
+const WS_BASE = `ws://${HOST}/ws`;
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, init);
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+    } catch {
+      /* body was not JSON */
+    }
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+const post = <T>(path: string, body?: unknown) =>
+  request<T>(path, {
+    method: "POST",
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
 
 export const api = {
-  async getSystemStatus(): Promise<SystemStatus> {
-    const res = await fetch(`${API_BASE}/system`);
-    return res.json();
-  },
+  getSystemStatus: () => request<SystemStatus>("/system"),
 
-  async createSimulation(params: {
+  createSimulation: (params: {
     num_neurons: number;
     model_type: string;
     excitatory_ratio: number;
     connection_probability: number;
     seed: number;
-  }) {
-    const res = await fetch(`${API_BASE}/simulation/create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify(params),
-    });
-    return res.json();
-  },
+  }) => post<{ message: string; metrics: RealtimeMetrics }>("/simulation/create", params),
 
-  async startSimulation() {
-    const res = await fetch(`${API_BASE}/simulation/start`, { method: "POST" });
-    return res.json();
-  },
+  startSimulation: () => post("/simulation/start"),
+  pauseSimulation: () => post("/simulation/pause"),
+  stepSimulation: (steps = 1) => post<{ metrics: RealtimeMetrics }>(`/simulation/step?steps=${steps}`),
+  resetSimulation: () => post("/simulation/reset"),
 
-  async pauseSimulation() {
-    const res = await fetch(`${API_BASE}/simulation/pause`, { method: "POST" });
-    return res.json();
-  },
+  injectCurrent: (target_cluster: string, amplitude_na: number, duration_ms = 20) =>
+    post<{ message: string }>("/simulation/inject", { target_cluster, amplitude_na, duration_ms }),
 
-  async stepSimulation(steps: number = 1) {
-    const res = await fetch(`${API_BASE}/simulation/step?steps=${steps}`, { method: "POST" });
-    return res.json();
-  },
+  getNeuralActivity: () => request<RealtimeMetrics>("/neural/activity"),
 
-  async resetSimulation() {
-    const res = await fetch(`${API_BASE}/simulation/reset`, { method: "POST" });
-    return res.json();
-  },
+  getNeuralNetwork3D: (maxEdges = 1200) =>
+    request<NetworkVisualizationPayload>(`/neural/network?max_edges=${maxEdges}`),
 
-  async injectCurrent(target_cluster: string, amplitude_na: number, duration_ms: number = 20) {
-    const res = await fetch(`${API_BASE}/simulation/inject`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify({ target_cluster, amplitude_na, duration_ms }),
-    });
-    return res.json();
-  },
-
-  async getNeuralActivity(): Promise<RealtimeMetrics> {
-    const res = await fetch(`${API_BASE}/neural/activity`);
-    return res.json();
-  },
-
-  async getNeuralNetwork3D(maxEdges: number = 1200): Promise<NetworkVisualizationPayload> {
-    const res = await fetch(`${API_BASE}/neural/network?max_edges=${maxEdges}`);
-    return res.json();
-  },
-
-  async configureLearning(params: {
+  configureLearning: (params: {
     stdp_enabled: boolean;
     homeostatic_enabled: boolean;
     a_plus: number;
     a_minus: number;
-  }) {
-    const res = await fetch(`${API_BASE}/learning/configure`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify(params),
-    });
-    return res.json();
-  },
+  }) => post("/learning/configure", params),
 
-  async storeMemoryPatterns(pattern_names: string[]) {
-    const res = await fetch(`${API_BASE}/memory/store`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify({ pattern_names }),
-    });
-    return res.json();
-  },
+  storeMemoryPatterns: (pattern_names: string[]) =>
+    post<{ meta: { num_patterns_stored: number; num_synapses_potentiated: number; mean_synaptic_weight: number } }>(
+      "/memory/store",
+      { pattern_names },
+    ),
 
-  async recallMemoryPattern(params: {
-    pattern_name: string;
-    noise_fraction: number;
-    mask_fraction: number;
-  }) {
-    const res = await fetch(`${API_BASE}/memory/recall`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify(params),
-    });
-    return res.json();
-  },
+  recallMemoryPattern: (params: { pattern_name: string; noise_fraction: number; mask_fraction: number }) =>
+    post<{ query_pattern: string; recall_result: RecallResult; original: number[]; cue: number[]; settled_rates_hz: number[] }>(
+      "/memory/recall",
+      params,
+    ),
 
-  async getNoiseBenchmark(pattern: string = "Alpha") {
-    const res = await fetch(`${API_BASE}/memory/noise_benchmark?pattern=${encodeURIComponent(pattern)}`);
-    return res.json();
-  },
+  getNoiseBenchmark: (pattern = "Alpha") =>
+    request<{ pattern: string; benchmark: NoisePoint[] }>(
+      `/memory/noise_benchmark?pattern=${encodeURIComponent(pattern)}`,
+    ),
 
-  async processAI(params: {
-    mode: string;
-    prompt: string;
-    model?: string;
-  }): Promise<AIProcessResult | AIComparisonResult> {
-    const res = await fetch(`${API_BASE}/ai/process`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify(params),
-    });
-    return res.json();
-  },
+  processAI: (params: { mode: string; prompt: string; model?: string }) =>
+    post<AIProcessResult | AIComparisonResult>("/ai/process", params),
 
-  async runExperiment(experiment_id: number, num_neurons: number = 250) {
-    const res = await fetch(`${API_BASE}/experiments/run`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: jsonStringify({ experiment_id, num_neurons }),
-    });
-    return res.json();
-  },
+  runExperiment: (experiment_id: number, num_neurons = 250) =>
+    post<Record<string, unknown>>("/experiments/run", { experiment_id, num_neurons }),
 
-  async getExperimentResults() {
-    const res = await fetch(`${API_BASE}/experiments/results`);
-    return res.json();
-  },
+  getExperimentResults: () => request<ExperimentSummary[]>("/experiments/results"),
 
-  async getOllamaModels() {
-    const res = await fetch(`${API_BASE}/ollama/models`);
-    return res.json();
-  },
+  getOllamaModels: () => request("/ollama/models"),
 
-  createSimulationWebSocket(onMessage: (data: any) => void): WebSocket {
+  createSimulationWebSocket(onMessage: (data: LivePacket) => void): WebSocket {
     const ws = new WebSocket(`${WS_BASE}/simulation`);
     ws.onmessage = (event) => {
       try {
-        const parsed = JSON.parse(event.data);
-        onMessage(parsed);
+        onMessage(JSON.parse(event.data));
       } catch (err) {
-        console.error("WS Parse error", err);
+        console.error("Could not parse simulation packet", err);
       }
     };
     return ws;
   },
 };
-
-function jsonStringify(obj: any): string {
-  return JSON.stringify(obj);
-}

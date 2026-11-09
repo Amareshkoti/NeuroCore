@@ -1,0 +1,2 @@
+experiment_name,timestamp,seed,num_neurons,num_synapses,total_spikes,mean_firing_rate_hz,accuracy,simulation_time_sec,memory_rss_mb
+Experiment 7: SNN vs Conventional ANN,2026-11-09T13:04:28.939373,42,100,0,0,0.0,1.0,4.1192,334.73

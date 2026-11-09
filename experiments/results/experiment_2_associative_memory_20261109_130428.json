@@ -1,0 +1,30 @@
+{
+  "experiment_name": "Experiment 2: Associative Memory",
+  "timestamp": "2026-11-09T13:04:27.830541",
+  "seed": 42,
+  "hardware": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "ram_total_gb": 31.67,
+    "device": "cpu"
+  },
+  "initial_memory_mb": 292.34,
+  "config": {
+    "num_neurons": 150
+  },
+  "num_neurons": 150,
+  "num_synapses": 2179,
+  "total_spikes": 15,
+  "mean_firing_rate_hz": 2.0,
+  "accuracy": 1.0,
+  "mean_attractor_overlap": 0.7436,
+  "patterns_tested": [
+    "Pattern_A",
+    "Pattern_B",
+    "Pattern_C"
+  ],
+  "simulation_time_sec": 0.7954,
+  "final_memory_mb": 292.35,
+  "memory_delta_mb": 0.01,
+  "cpu_percent": 0.0
+}

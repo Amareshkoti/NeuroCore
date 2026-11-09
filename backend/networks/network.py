@@ -278,10 +278,17 @@ class SpikingNeuralNetwork:
 
         if len(non_zero_indices) > 0:
             if len(non_zero_indices) > max_edges:
-                # Sample the highest-weight synapses
+                # Sample the highest-weight synapses of each presynaptic type, split by
+                # population share, so stronger inhibitory weights do not crowd out excitatory ones
                 flat_weights = w[non_zero_indices[:, 0], non_zero_indices[:, 1]]
-                top_indices = np.argsort(flat_weights)[-max_edges:]
-                selected = non_zero_indices[top_indices]
+                pre_exc = self.is_excitatory[non_zero_indices[:, 1]]
+                n_exc = int(round(max_edges * float(np.mean(self.is_excitatory))))
+                picks = []
+                for mask, k in ((pre_exc, n_exc), (~pre_exc, max_edges - n_exc)):
+                    idx = np.where(mask)[0]
+                    if k > 0 and len(idx):
+                        picks.append(idx[np.argsort(flat_weights[idx])[-k:]])
+                selected = non_zero_indices[np.concatenate(picks)] if picks else non_zero_indices[:0]
             else:
                 selected = non_zero_indices
 

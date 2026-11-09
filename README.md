@@ -105,7 +105,7 @@ Inspected and detected on this host:
 ```bash
 .\.venv\Scripts\pytest backend\tests -v
 ```
-Runs 29 automated validation tests covering differential equations, refractory periods, Brian2 cross-validation, STDP timing curves, associative memory recovery, and API endpoints.
+Runs 32 automated validation tests covering differential equations, refractory periods, Brian2 cross-validation, STDP timing curves, associative memory recovery, and API endpoints.
 
 ### B. Launch Research Workstation Server
 ```bash
@@ -117,6 +117,13 @@ Open **`http://127.0.0.1:8000`** in your browser to access the complete interact
 ```bash
 .\.venv\Scripts\python scripts\run_simulator_cli.py
 ```
+
+### D. Rebuild the 60-second presentation video
+```bash
+.\.venv\Scripts\python scripts\export_video_data.py
+python scripts\render_video.py
+```
+The first command runs the simulator (and Ollama, unless `--skip-llm`) and writes `video/video_data.json`. The second needs the server running and Selenium with Chrome; it captures UI screenshots, renders `video/neurocore_video.html` frame by frame and writes `linkedin_neurocore_presentation.mp4`. To preview the timeline live, serve the `video/` folder over HTTP and open `neurocore_video.html`.
 
 ---
 

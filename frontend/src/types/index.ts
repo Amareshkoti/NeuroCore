@@ -113,6 +113,40 @@ export interface AIProcessResult {
   };
 }
 
+export interface RecallResult {
+  matched_label: string;
+  cosine_similarity: number;
+  hamming_similarity: number;
+  settled_firing_rate_hz: number;
+  total_settling_spikes: number;
+  all_similarities: Record<string, number>;
+}
+
+export interface NoisePoint {
+  noise_fraction: number;
+  input_cue_similarity: number;
+  recovered_similarity: number;
+  matched_label: string;
+  is_correct_attractor: boolean;
+}
+
+export interface ExperimentSummary {
+  filename: string;
+  experiment_name: string;
+  timestamp: string;
+  accuracy?: number | null;
+  simulation_time_sec?: number | null;
+  num_neurons?: number | null;
+}
+
+export interface LivePacket {
+  metrics?: RealtimeMetrics;
+  is_running?: boolean;
+  spiked_ids?: number[];
+  spike_events?: [number, number][];
+  sample_v?: number[];
+}
+
 export interface AIComparisonResult {
   prompt: string;
   mode_a: AIProcessResult;

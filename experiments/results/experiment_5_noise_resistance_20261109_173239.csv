@@ -1,0 +1,2 @@
+experiment_name,timestamp,seed,num_neurons,num_synapses,total_spikes,mean_firing_rate_hz,accuracy,simulation_time_sec,memory_rss_mb
+Experiment 5: Noise Resistance,2026-11-09T17:32:36.970631,42,250,6139,90,7.2,1.0,2.3317,251.15

@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>NEUROCORE video</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; background: #efe9ef; overflow: hidden; }
+  canvas { display: block; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+/* NEUROCORE — 60 s presentation, rendered frame by frame.
+   render(t) is deterministic: the capture script calls it for every frame.
+   All plotted data comes from video_data.json (scripts/export_video_data.py). */
+
+const W = 1920, H = 1080, DURATION = 60;
+const C = {
+  slide: "#efe9ef", paper: "#fbf9fb", sunk: "#f4eff4", rule: "#ddd2dc", rule2: "#c6b7c4",
+  ink: "#231a3d", ink2: "#554a6b", ink3: "#8a7f98",
+  exc: "#4a3aa8", excSoft: "#e4e0f6", inh: "#c42f63", inhSoft: "#f7dfe8", spike: "#d99a06", ok: "#23775a",
+};
+const DISPLAY = "'Bricolage Grotesque', sans-serif";
+const TEXT = "'Public Sans', sans-serif";
+const ctx = document.getElementById("c").getContext("2d");
+let D = null;
+const IMG = {};
+
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const lerp = (a, b, k) => a + (b - a) * k;
+const fmtInt = (n) => Math.round(n).toLocaleString("en-US");
+
+function font(size, weight = 400, fam = TEXT) { ctx.font = `${weight} ${size}px ${fam}`; }
+
+// Wrapped text that never exceeds maxW; returns the y after the last line.
+function text(str, x, y, { size = 28, weight = 400, fam = TEXT, color = C.ink, align = "left", maxW = 1600, lh = 1.35, maxLines = 99, alpha = 1, track = 0 } = {}) {
+  font(size, weight, fam);
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = "alphabetic";
+  ctx.globalAlpha *= alpha;
+  if (track) ctx.letterSpacing = `${track}px`;
+  const words = String(str).split(" ");
+  const lines = [];
+  let cur = "";
+  for (const w of words) {
+    const test = cur ? cur + " " + w : w;
+    if (ctx.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test;
+  }
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) {
+    lines.length = maxLines;
+    let last = lines[maxLines - 1];
+    while (ctx.measureText(last + "…").width > maxW && last.length) last = last.slice(0, -1);
+    lines[maxLines - 1] = last.trimEnd() + "…";
+  }
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * size * lh));
+  ctx.globalAlpha /= alpha || 1;
+  if (track) ctx.letterSpacing = "0px";
+  return y + lines.length * size * lh;
+}
+
+function rrect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function panel(x, y, w, h, fill = C.paper) {
+  rrect(x, y, w, h, 18);
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = C.rule; ctx.lineWidth = 1.5; ctx.stroke();
+}
+function withAlpha(a, fn) { ctx.save(); ctx.globalAlpha *= a; fn(); ctx.restore(); }
+function rise(t, start, dur = 0.7) { const k = easeOut(prog(t, start, start + dur)); return { a: k, dy: (1 - k) * 26 }; }
+
+// Scene title block used by most scenes. The small kicker is the scene's place in the story.
+function heading(t, s, kicker, title, sub) {
+  const r1 = rise(t, s + 0.1), r2 = rise(t, s + 0.3), r3 = rise(t, s + 0.5);
+  withAlpha(r1.a, () => text(kicker, 120, 132 + r1.dy, { size: 26, weight: 600, color: C.exc }));
+  withAlpha(r2.a, () => text(title, 120, 208 + r2.dy, { size: 72, weight: 800, fam: DISPLAY, maxW: 1680, lh: 1.05 }));
+  if (sub) withAlpha(r3.a, () => text(sub, 120, 268 + r3.dy, { size: 29, color: C.ink2, maxW: 1500 }));
+}
+
+// ---------- precomputed data ----------
+let rasterT, rasterId, rowOf, nExc, spikesOfProbe;
+function prepare() {
+  const n = D.network;
+  rasterT = Float32Array.from(n.raster, (e) => e[0]);
+  rasterId = Int32Array.from(n.raster, (e) => e[1]);
+  rowOf = new Int32Array(n.num_neurons);
+  let r = 0;
+  n.is_exc.forEach((e, i) => { if (e) rowOf[i] = r++; });
+  nExc = r;
+  n.is_exc.forEach((e, i) => { if (!e) rowOf[i] = r++; });
+  spikesOfProbe = n.raster.filter((e) => e[1] === n.probe_id).map((e) => e[0]);
+}
+function countUntil(ts) { // number of raster events with t <= ts (raster is time-sorted)
+  let lo = 0, hi = rasterT.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (rasterT[m] <= ts) lo = m + 1; else hi = m; }
+  return lo;
+}
+
+// ---------- scenes ----------
+const SCENES = [
+  { s: 0, e: 6, draw: sceneTitle },
+  { s: 6, e: 14, draw: sceneNeuron },
+  { s: 14, e: 23, draw: sceneNetwork },
+  { s: 23, e: 31, draw: scenePlasticity },
+  { s: 31, e: 40, draw: sceneMemory },
+  { s: 40, e: 48.5, draw: sceneHybrid },
+  { s: 48.5, e: 55, draw: sceneWorkstation },
+  { s: 55, e: 60, draw: sceneOutro },
+];
+
+function sceneTitle(t, s) {
+  // the real raster, drawn faintly across the slide as it is simulated
+  const n = D.network;
+  const ts = n.duration_ms * ease(prog(t, s + 0.2, s + 5.4));
+  const k = countUntil(ts);
+  const x0 = 120, x1 = 1800, y0 = 600, y1 = 900;
+  withAlpha(0.95, () => {
+    ctx.strokeStyle = C.rule; ctx.setLineDash([5, 7]); ctx.lineWidth = 1.2;
+    const yb = y0 + (nExc / n.num_neurons) * (y1 - y0);
+    ctx.beginPath(); ctx.moveTo(x0, yb); ctx.lineTo(x1, yb); ctx.stroke(); ctx.setLineDash([]);
+    for (let i = 0; i < k; i++) {
+      const x = x0 + (rasterT[i] / n.duration_ms) * (x1 - x0);
+      const y = y0 + (rowOf[rasterId[i]] / n.num_neurons) * (y1 - y0);
+      ctx.fillStyle = n.is_exc[rasterId[i]] ? C.exc : C.inh;
+      ctx.fillRect(x, y, 2.6, 2.2);
+    }
+    // stimulus window
+    const sx0 = x0 + (n.stim_window_ms[0] / n.duration_ms) * (x1 - x0);
+    const sx1 = x0 + (n.stim_window_ms[1] / n.duration_ms) * (x1 - x0);
+    ctx.fillStyle = C.spike; ctx.globalAlpha *= prog(t, s + 1.6, s + 2.4);
+    ctx.fillRect(sx0, y1 + 16, sx1 - sx0, 4);
+  });
+  withAlpha(prog(t, s + 1.6, s + 2.4), () => {
+    const sx0 = x0 + (n.stim_window_ms[0] / n.duration_ms) * (x1 - x0);
+    text(`Current switched on for ${n.stim_window_ms[1] - n.stim_window_ms[0]} ms`, sx0, y1 + 52, { size: 22, color: C.ink3 });
+    text(`${fmtInt(k)} spikes from ${fmtInt(n.num_neurons)} simulated neurons`, x1, y1 + 52, { size: 22, color: C.ink3, align: "right" });
+  });
+
+  const r1 = rise(t, s + 0.2, 0.9), r2 = rise(t, s + 0.8, 0.9);
+  withAlpha(r1.a, () => {
+    drawGlyph(112, 176 + r1.dy, 1.9);
+    text("NEUROCORE", 292, 300 + r1.dy, { size: 168, weight: 800, fam: DISPLAY, track: 2 });
+  });
+  withAlpha(r2.a, () => text("Simulated neurons that compute, learn and remember, tested against a local LLM.", 124, 400 + r2.dy, { size: 40, color: C.ink2, maxW: 1400 }));
+}
+
+function sceneNeuron(t, s) {
+  const n = D.network;
+  heading(t, s, "The building block", "One neuron, one differential equation", "A leaky integrate-and-fire cell, integrated every 0.1 ms. This is its real membrane trace.");
+  const r = rise(t, s + 0.6);
+  withAlpha(r.a, () => {
+    panel(120, 330 + r.dy, 1680, 560);
+    // equation
+    text("τₘ dV/dt = −(V − Vᵣₑₛₜ) + Rₘ I", 170, 400 + r.dy, { size: 36, weight: 500, fam: "'Cambria Math', 'Times New Roman', serif", color: C.ink });
+    text(`fire when V ≥ ${n.v_threshold} mV, then reset to ${n.v_reset} mV for 2 ms`, 1750, 398 + r.dy, { size: 24, color: C.ink3, align: "right" });
+
+    const x0 = 230, x1 = 1750, y0 = 450 + r.dy, y1 = 840 + r.dy;
+    const vMin = -72, vMax = -46;
+    const Y = (v) => y1 - ((v - vMin) / (vMax - vMin)) * (y1 - y0);
+    const X = (tm) => x0 + (tm / n.duration_ms) * (x1 - x0);
+    // axes and reference lines
+    font(20, 500); ctx.fillStyle = C.ink3; ctx.textAlign = "right";
+    for (const v of [-70, -65, -60, -55, -50]) {
+      ctx.fillText(`${v} mV`, x0 - 16, Y(v) + 7);
+      ctx.strokeStyle = v === -50 ? C.spike : C.rule; ctx.lineWidth = v === -50 ? 2 : 1;
+      ctx.setLineDash(v === -50 ? [8, 8] : []);
+      ctx.beginPath(); ctx.moveTo(x0, Y(v)); ctx.lineTo(x1, Y(v)); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.textAlign = "center";
+    for (let tm = 0; tm <= n.duration_ms; tm += 50) ctx.fillText(`${tm} ms`, X(tm), y1 + 34);
+    // stimulus shading
+    ctx.fillStyle = "rgba(217,154,6,0.08)";
+    ctx.fillRect(X(n.stim_window_ms[0]), y0, X(n.stim_window_ms[1]) - X(n.stim_window_ms[0]), y1 - y0);
+
+    const reveal = ease(prog(t, s + 1.0, s + 6.8));
+    const upto = Math.floor(reveal * (n.v_probe.length - 1));
+    ctx.strokeStyle = C.exc; ctx.lineWidth = 3; ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (let i = 0; i <= upto; i++) {
+      const x = X(i * n.dt_ms), y = Y(n.v_probe[i]);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+    // spikes: the model emits an event at threshold, drawn as an ochre tick
+    const tNow = upto * n.dt_ms;
+    let shown = 0;
+    for (const ts of spikesOfProbe) {
+      if (ts > tNow) break;
+      shown++;
+      ctx.strokeStyle = C.spike; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(X(ts), Y(-50)); ctx.lineTo(X(ts), Y(-50) - 60); ctx.stroke();
+      ctx.fillStyle = C.spike; ctx.beginPath(); ctx.arc(X(ts), Y(-50) - 64, 6, 0, 7); ctx.fill();
+    }
+    text(`Neuron ${n.probe_id}: ${shown} spike${shown === 1 ? "" : "s"}`, 1750, 470 + r.dy, { size: 26, weight: 600, color: C.spike, align: "right" });
+  });
+}
+
+function project(p, ang) {
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  let x = p[0] * ca + p[2] * sa, z = -p[0] * sa + p[2] * ca, y = p[1];
+  const tilt = 0.32, ct = Math.cos(tilt), st = Math.sin(tilt);
+  const y2 = y * ct - z * st, z2 = y * st + z * ct;
+  const f = 520 / (520 + z2);
+  return [x * 3.1 * f, -y2 * 3.1 * f, f, z2];
+}
+
+function sceneNetwork(t, s) {
+  const n = D.network;
+  heading(t, s, "The network", `${fmtInt(n.num_neurons)} neurons, ${fmtInt(n.num_synapses)} synapses`, `${fmtInt(n.num_excitatory)} excitatory and ${fmtInt(n.num_inhibitory)} inhibitory cells. Every flash below is a spike from the run.`);
+  const ts = lerp(40, 230, prog(t, s + 0.8, s + 8.4));
+  const k = countUntil(ts);
+  const recentFrom = countUntil(ts - 6);
+  const lit = new Set();
+  for (let i = recentFrom; i < k; i++) lit.add(rasterId[i]);
+
+  const r = rise(t, s + 0.5);
+  withAlpha(r.a, () => {
+    panel(120, 330 + r.dy, 900, 600, "#ffffff");
+    const cx = 570, cy = 640 + r.dy, ang = 0.6 + (t - s) * 0.22;
+    const pts = n.positions.map((p, i) => [...project(p, ang), i]).sort((a, b) => b[3] - a[3]);
+    for (const [x, y, f, , i] of pts) {
+      const on = lit.has(i);
+      ctx.globalAlpha = on ? 1 : 0.35 + 0.5 * f;
+      ctx.fillStyle = on ? C.spike : n.is_exc[i] ? C.exc : C.inh;
+      ctx.beginPath(); ctx.arc(cx + x, cy + y, (on ? 7.5 : 3.4) * f, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    legend(150, 905 + r.dy);
+
+    // raster
+    panel(1060, 330 + r.dy, 740, 600);
+    text("Spike raster", 1100, 384 + r.dy, { size: 28, weight: 700, fam: DISPLAY });
+    text(`t = ${ts.toFixed(1)} ms`, 1760, 384 + r.dy, { size: 24, color: C.ink3, align: "right" });
+    const x0 = 1100, x1 = 1760, y0 = 420 + r.dy, y1 = 820 + r.dy;
+    ctx.fillStyle = "rgba(217,154,6,0.09)";
+    ctx.fillRect(x0 + (n.stim_window_ms[0] / n.duration_ms) * (x1 - x0), y0, ((n.stim_window_ms[1] - n.stim_window_ms[0]) / n.duration_ms) * (x1 - x0), y1 - y0);
+    ctx.strokeStyle = C.rule2; ctx.setLineDash([4, 6]); ctx.lineWidth = 1;
+    const yb = y0 + (nExc / n.num_neurons) * (y1 - y0);
+    ctx.beginPath(); ctx.moveTo(x0, yb); ctx.lineTo(x1, yb); ctx.stroke(); ctx.setLineDash([]);
+    for (let i = 0; i < k; i++) {
+      ctx.fillStyle = n.is_exc[rasterId[i]] ? C.exc : C.inh;
+      ctx.fillRect(x0 + (rasterT[i] / n.duration_ms) * (x1 - x0), y0 + (rowOf[rasterId[i]] / n.num_neurons) * (y1 - y0), 2.4, 2);
+    }
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 2;
+    const xn = x0 + (ts / n.duration_ms) * (x1 - x0);
+    ctx.beginPath(); ctx.moveTo(xn, y0); ctx.lineTo(xn, y1); ctx.stroke();
+    text(`${fmtInt(k)} spikes`, 1100, 880 + r.dy, { size: 40, weight: 700, fam: DISPLAY, color: C.spike });
+    text("Shaded: current into the sensory group", 1760, 876 + r.dy, { size: 22, color: C.ink3, align: "right" });
+  });
+}
+
+function legend(x, y) {
+  const items = [[C.exc, "Excitatory"], [C.inh, "Inhibitory"], [C.spike, "Spiked in the last 6 ms"]];
+  font(22, 500);
+  let xx = x;
+  for (const [c, l] of items) {
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(xx + 8, y - 7, 8, 0, 7); ctx.fill();
+    ctx.fillStyle = C.ink2; ctx.textAlign = "left"; ctx.fillText(l, xx + 24, y);
+    xx += 48 + ctx.measureText(l).width;
+  }
+}
+
+function plotFrame(x0, y0, x1, y1) {
+  ctx.strokeStyle = C.rule; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = lerp(y0, y1, i / 4); ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+}
+
+function scenePlasticity(t, s) {
+  const p = D.stdp;
+  heading(t, s, "Learning", "Synapses change with spike timing", "Spike-timing-dependent plasticity: input just before output strengthens a synapse, just after weakens it.");
+  const r = rise(t, s + 0.6);
+  withAlpha(r.a, () => {
+    // learning window (the rule itself)
+    panel(120, 330 + r.dy, 800, 600);
+    text("The rule", 160, 386 + r.dy, { size: 30, weight: 700, fam: DISPLAY });
+    text(`A₊ = ${p.a_plus}, A₋ = ${p.a_minus}, τ = ${p.tau_ms} ms`, 880, 384 + r.dy, { size: 22, color: C.ink3, align: "right" });
+    const x0 = 180, x1 = 860, yc = 640 + r.dy, amp = 210;
+    plotFrame(x0, yc - amp, x1, yc + amp);
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo((x0 + x1) / 2, yc - amp); ctx.lineTo((x0 + x1) / 2, yc + amp); ctx.stroke();
+    const draw = ease(prog(t, s + 1.0, s + 3.0));
+    const maxA = Math.max(p.a_plus, p.a_minus);
+    ctx.lineWidth = 4;
+    for (const side of [1, -1]) {
+      ctx.strokeStyle = side > 0 ? C.exc : C.inh;
+      ctx.beginPath();
+      for (let i = 1; i <= 60 * draw; i++) {
+        const dt = i * side;
+        const dw = side > 0 ? p.a_plus * Math.exp(-i / p.tau_ms) : -p.a_minus * Math.exp(-i / p.tau_ms);
+        const x = (x0 + x1) / 2 + (dt / 60) * ((x1 - x0) / 2);
+        const y = yc - (dw / maxA) * amp * 0.92;
+        i === 1 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    font(21, 500); ctx.fillStyle = C.ink3; ctx.textAlign = "center";
+    ctx.fillText("−60 ms", x0, yc + amp + 34); ctx.fillText("0", (x0 + x1) / 2, yc + amp + 34); ctx.fillText("+60 ms", x1, yc + amp + 34);
+    text("strengthen", x1 - 10, yc - amp + 36, { size: 22, weight: 600, color: C.exc, align: "right" });
+    text("weaken", x0 + 10, yc + amp - 16, { size: 22, weight: 600, color: C.inh });
+
+    // measured result
+    panel(960, 330 + r.dy, 840, 600);
+    text(`What happened in ${p.duration_ms} ms of driven activity`, 1000, 386 + r.dy, { size: 30, weight: 700, fam: DISPLAY, maxW: 760 });
+    text(`${fmtInt(p.num_neurons)} neurons, ${fmtInt(p.num_synapses)} synapses`, 1000, 424 + r.dy, { size: 22, color: C.ink3 });
+    const kk = easeOut(prog(t, s + 1.6, s + 3.4));
+    const bars = [["Weakened", p.depressed, C.inh], ["Strengthened", p.potentiated, C.exc]];
+    const maxB = Math.max(p.depressed, p.potentiated);
+    bars.forEach(([l, v, c], i) => {
+      const y = 480 + i * 92 + r.dy;
+      text(l, 1000, y + 30, { size: 26, color: C.ink2 });
+      ctx.fillStyle = c; rrect(1200, y, Math.max(6, (v / maxB) * 420 * kk), 42, 8); ctx.fill();
+      text(fmtInt(v * kk), 1200 + Math.max(6, (v / maxB) * 420 * kk) + 16, y + 32, { size: 30, weight: 700, fam: DISPLAY });
+    });
+    // mean weight trend
+    const tr = p.mean_weight_trend;
+    const gx0 = 1000, gx1 = 1760, gy0 = 700 + r.dy, gy1 = 830 + r.dy;
+    plotFrame(gx0, gy0, gx1, gy1);
+    const lo = Math.min(...tr), hi = Math.max(...tr);
+    const dk = ease(prog(t, s + 2.2, s + 5.2));
+    ctx.strokeStyle = C.ink; ctx.lineWidth = 3.5; ctx.beginPath();
+    const m = Math.max(1, Math.round((tr.length - 1) * dk));
+    for (let i = 0; i <= m; i++) {
+      const x = lerp(gx0, gx1, i / (tr.length - 1)), y = gy1 - ((tr[i] - lo) / (hi - lo || 1)) * (gy1 - gy0);
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.stroke();
+    text(`Mean weight ${tr[0].toFixed(3)} → ${tr[tr.length - 1].toFixed(3)}`, 1000, 686 + r.dy, { size: 24, weight: 600, color: C.ink });
+    text("0 ms", gx0, gy1 + 30, { size: 19, color: C.ink3 });
+    text(`${p.duration_ms} ms`, gx1, gy1 + 30, { size: 19, color: C.ink3, align: "right" });
+    withAlpha(prog(t, s + 5.2, s + 6), () => text("Here depression dominated. Weights moved because of the spikes.", 1000, 900 + r.dy, { size: 22, color: C.ink2, maxW: 770, maxLines: 1 }));
+  });
+}
+
+function drawGrid(vals, x, y, cell, color, diff) {
+  const cols = Math.ceil(Math.sqrt(vals.length));
+  const max = Math.max(...vals, 1e-6);
+  ctx.fillStyle = C.sunk; rrect(x - 8, y - 8, cols * cell + 16, Math.ceil(vals.length / cols) * cell + 16, 12); ctx.fill();
+  vals.forEach((v, i) => {
+    const cx = x + (i % cols) * cell, cy = y + Math.floor(i / cols) * cell;
+    const a = Math.min(1, v / max);
+    if (a > 0.02) { ctx.globalAlpha = 0.18 + 0.82 * a; ctx.fillStyle = color; ctx.fillRect(cx + 1.5, cy + 1.5, cell - 3, cell - 3); ctx.globalAlpha = 1; }
+    if (diff && Math.round(diff[i]) !== Math.round(v)) { ctx.strokeStyle = C.spike; ctx.lineWidth = 2; ctx.strokeRect(cx + 2, cy + 2, cell - 4, cell - 4); }
+  });
+}
+
+function sceneMemory(t, s) {
+  const m = D.memory;
+  heading(t, s, "Memory", "Recall from a damaged cue", `Four patterns written into recurrent weights. The cue below has ${Math.round(m.mask_fraction * 100)}% of its cells hidden and ${Math.round(m.noise_fraction * 100)}% flipped.`);
+  const cell = 19;
+  const items = [["Stored pattern", m.original, C.ink], ["Cue given to the network", m.cue, C.inh, m.original], ["Firing after it settles", m.settled_rates_hz, C.exc]];
+  items.forEach(([label, vals, color, diff], i) => {
+    const r = rise(t, s + 0.7 + i * 0.9);
+    withAlpha(r.a, () => {
+      const x = 130 + i * 410, y = 360 + r.dy;
+      drawGrid(vals, x, y, cell, color, diff);
+      text(label, x - 8, y + 18 * cell + 50, { size: 25, weight: 600, color: C.ink2, maxW: 380 });
+      if (i < 2) {
+        ctx.strokeStyle = C.ink3; ctx.lineWidth = 3;
+        const ax = x + 18 * cell + 22, ay = y + 170;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 22, ay); ctx.lineTo(ax + 14, ay - 8); ctx.moveTo(ax + 22, ay); ctx.lineTo(ax + 14, ay + 8); ctx.stroke();
+      }
+    });
+  });
+  const r = rise(t, s + 3.4);
+  withAlpha(r.a, () => {
+    panel(1370, 340 + r.dy, 430, 590);
+    text("Similarity to each memory", 1405, 394 + r.dy, { size: 26, weight: 700, fam: DISPLAY, maxW: 370 });
+    const sims = Object.entries(m.all_similarities);
+    const k = easeOut(prog(t, s + 3.8, s + 5.2));
+    sims.forEach(([l, v], i) => {
+      const y = 430 + i * 62 + r.dy;
+      text(l, 1405, y + 28, { size: 23, color: C.ink2 });
+      ctx.fillStyle = l === m.matched_label ? C.exc : "#d3cadf";
+      rrect(1500, y + 8, Math.max(4, v * 220 * k), 28, 6); ctx.fill();
+      text(v.toFixed(2), 1510 + v * 220 * k + 10, y + 30, { size: 22, weight: 600 });
+    });
+    const sw = m.noise_sweep;
+    const ok = sw.filter((p) => p.is_correct_attractor);
+    withAlpha(prog(t, s + 5.4, s + 6.2), () => {
+      text("Noise sweep", 1405, 730 + r.dy, { size: 26, weight: 700, fam: DISPLAY });
+      sw.forEach((p, i) => {
+        const x = 1405 + i * 76, y = 760 + r.dy;
+        ctx.fillStyle = p.is_correct_attractor ? C.ok : C.inh;
+        rrect(x, y, 64, 52, 10); ctx.fill();
+        text(`${Math.round(p.noise_fraction * 100)}%`, x + 32, y + 34, { size: 21, weight: 700, color: "#fff", align: "center" });
+      });
+      text(`Right memory at ${Math.round(ok[0].noise_fraction * 100)}–${Math.round(ok[ok.length - 1].noise_fraction * 100)}% bit flips. Wrong at ${sw.filter((p) => !p.is_correct_attractor).map((p) => Math.round(p.noise_fraction * 100) + "%").join(", ")}.`, 1405, 862 + r.dy, { size: 21, color: C.ink2, maxW: 370, maxLines: 3 });
+    });
+  });
+  withAlpha(prog(t, s + 2.8, s + 3.6), () =>
+    text(`Answer: ${m.matched_label}. Cosine similarity ${m.cosine_similarity.toFixed(2)}.`, 122, 940, { size: 27, weight: 600, color: C.exc }));
+}
+
+function sceneHybrid(t, s) {
+  const h = D.hybrid;
+  heading(t, s, "Hybrid AI", "Does a spiking network help an LLM?", h && h.available ? `Same prompt, three paths, ${h.model} running locally through Ollama.` : "Ollama was not reachable when this data was recorded.");
+  if (!h || !h.available) return;
+  withAlpha(prog(t, s + 0.6, s + 1.2), () => text(`“${h.prompt}”`, 120, 336, { size: 27, weight: 500, color: C.ink2, maxW: 1680 }));
+  const modes = [
+    ["A", "LLM only", "Prompt → Ollama", h.mode_a.latency_sec, `${h.mode_a.tokens} tokens, 0 spikes`, h.mode_a.response, C.ink],
+    ["B", "Network only", "Embedding → 500 neurons → attractor", h.mode_b.latency_sec, `${fmtInt(h.mode_b.spikes)} spikes, no text`, `Settled into the attractor labelled “${h.mode_b.attractor.replace(/_/g, " ")}”. The label is a name for a stored network state, not an understanding of the prompt.`, C.exc],
+    ["C", "Hybrid", "Network readout added to the LLM prompt", h.mode_c.latency_sec, `${h.mode_c.tokens} tokens, ${fmtInt(h.mode_c.spikes)} spikes`, h.mode_c.response, C.inh],
+  ];
+  const maxL = Math.max(...modes.map((m) => m[3]));
+  modes.forEach(([key, name, path, lat, cost, resp, color], i) => {
+    const r = rise(t, s + 1.0 + i * 0.6);
+    withAlpha(r.a, () => {
+      const x = 120 + i * 568, y = 376 + r.dy, w = 544, hgt = 490;
+      panel(x, y, w, hgt);
+      ctx.fillStyle = color; rrect(x + 32, y + 32, 56, 56, 14); ctx.fill();
+      text(key, x + 60, y + 72, { size: 32, weight: 800, fam: DISPLAY, color: "#fff", align: "center" });
+      text(name, x + 108, y + 72, { size: 34, weight: 700, fam: DISPLAY });
+      text(path, x + 32, y + 130, { size: 22, color: C.ink3, maxW: w - 64 });
+      const k = easeOut(prog(t, s + 2.2 + i * 0.3, s + 3.6 + i * 0.3));
+      text(`${(lat * k).toFixed(1)} s`, x + 32, y + 206, { size: 52, weight: 800, fam: DISPLAY, color });
+      ctx.fillStyle = C.sunk; rrect(x + 32, y + 226, w - 64, 12, 6); ctx.fill();
+      ctx.fillStyle = color; rrect(x + 32, y + 226, Math.max(12, ((w - 64) * lat * k) / maxL), 12, 6); ctx.fill();
+      text(cost, x + 32, y + 280, { size: 23, weight: 600, color: C.ink2 });
+      withAlpha(prog(t, s + 3.6, s + 4.4), () => text(resp, x + 32, y + 330, { size: 22, color: C.ink, maxW: w - 64, maxLines: 6, lh: 1.42 }));
+    });
+  });
+  withAlpha(prog(t, s + 5.4, s + 6.2), () =>
+    text("Honest result: the network adds a measurable signal, not intelligence. The answers were no better, and the latency gap mostly reflects model warm-up.", 120, 922, { size: 24, weight: 600, color: C.ink, maxW: 1680, maxLines: 2 }));
+}
+
+function sceneWorkstation(t, s) {
+  heading(t, s, "The workstation", "See it run, live, on your own machine", "React, Three.js and Recharts on a FastAPI simulator, streamed over WebSockets.");
+  const shots = [
+    ["lab", "Neural lab", "Build, drive and measure the network"],
+    ["network", "3D network", "Spikes flash on the neurons that fired"],
+    ["memory", "Memory", "Store patterns, damage a cue, recall"],
+  ];
+  const per = (6.5 - 0.6) / shots.length;
+  const idx = Math.min(shots.length - 1, Math.floor(Math.max(0, t - s - 0.6) / per));
+  shots.forEach(([key, label, desc], i) => {
+    const r = rise(t, s + 0.5 + i * 0.15);
+    const active = i === idx;
+    withAlpha(r.a, () => {
+      const y = 380 + i * 150 + r.dy;
+      ctx.fillStyle = active ? C.exc : C.rule; rrect(120, y - 34, 6, 92, 3); ctx.fill();
+      text(label, 150, y, { size: 34, weight: 700, fam: DISPLAY, color: active ? C.ink : C.ink3 });
+      text(desc, 150, y + 44, { size: 23, color: active ? C.ink2 : C.ink3, maxW: 480 });
+    });
+  });
+  const x = 700, y = 318, w = 1100;
+  shots.forEach(([key], i) => {
+    const img = IMG[key];
+    if (!img) return;
+    const h = Math.round((w * img.height) / img.width);
+    const a = i === 0 ? prog(t, s + 0.6, s + 1.1) : prog(t, s + 0.6 + i * per - 0.25, s + 0.6 + i * per + 0.2);
+    if (a <= 0) return;
+    withAlpha(a, () => {
+      const hh = Math.min(h, 660);
+      ctx.save();
+      ctx.shadowColor = "rgba(35,26,61,0.16)"; ctx.shadowBlur = 44; ctx.shadowOffsetY = 20;
+      rrect(x, y, w, hh, 18); ctx.fillStyle = "#fff"; ctx.fill();
+      ctx.restore();
+      ctx.save(); rrect(x, y, w, hh, 18); ctx.clip(); ctx.drawImage(img, 0, 0, img.width, (hh / h) * img.height, x, y, w, hh); ctx.restore();
+      ctx.strokeStyle = C.rule2; ctx.lineWidth = 1.5; rrect(x, y, w, hh, 18); ctx.stroke();
+    });
+  });
+}
+
+function sceneOutro(t, s) {
+  const r1 = rise(t, s + 0.2, 0.9), r2 = rise(t, s + 0.7), r3 = rise(t, s + 1.2);
+  withAlpha(r1.a, () => {
+    drawGlyph(112, 222 + r1.dy, 1.6);
+    text("NEUROCORE", 262, 330 + r1.dy, { size: 140, weight: 800, fam: DISPLAY, track: 2 });
+  });
+  withAlpha(r2.a, () => text("An open research prototype for studying spiking neural computation and hybrid AI. Simulated neurons, real equations, honest results. Not a brain.", 124, 430 + r2.dy, { size: 36, color: C.ink2, maxW: 1400 }));
+  withAlpha(r3.a, () => {
+    const stack = ["Python", "NumPy", "PyTorch", "Brian2", "FastAPI", "React", "Three.js", "Ollama"];
+    let x = 124;
+    font(25, 600);
+    for (const sName of stack) {
+      const w = ctx.measureText(sName).width + 40;
+      ctx.fillStyle = C.paper; rrect(x, 620 + r3.dy, w, 54, 27); ctx.fill();
+      ctx.strokeStyle = C.rule2; ctx.lineWidth = 1.5; ctx.stroke();
+      text(sName, x + w / 2, 656 + r3.dy, { size: 25, weight: 600, color: C.ink, align: "center" });
+      x += w + 14;
+    }
+    text(`Recorded on ${D.hardware.processor ? "a laptop CPU" : "CPU"}${D.hardware.cuda ? " with CUDA" : ", no GPU"}. Every number in this video came from the simulator.`, 124, 760 + r3.dy, { size: 25, color: C.ink3, maxW: 1500 });
+  });
+}
+
+function drawGlyph(x, y, k) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(k * 3, k * 3);
+  ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(13, 3); ctx.lineTo(13, 9); ctx.moveTo(13, 6); ctx.lineTo(9, 2); ctx.moveTo(13, 6); ctx.lineTo(17, 2.5);
+  ctx.moveTo(13, 19); ctx.lineTo(13, 25); ctx.moveTo(13, 22); ctx.lineTo(9.5, 24.5);
+  ctx.stroke();
+  ctx.fillStyle = C.exc; ctx.beginPath(); ctx.moveTo(13, 8.5); ctx.lineTo(18, 18.5); ctx.lineTo(8, 18.5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = C.spike; ctx.beginPath(); ctx.arc(13, 25, 1.4, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+// Watermark and progress, on every frame.
+function chrome(t) {
+  ctx.fillStyle = C.paper;
+  ctx.fillRect(0, H - 84, W, 84);
+  ctx.fillStyle = C.rule; ctx.fillRect(0, H - 84, W, 1.5);
+  text("K.Amaresh", 120, H - 32, { size: 30, weight: 800, fam: DISPLAY, color: C.ink });
+  font(30, 800, DISPLAY);
+  const w = ctx.measureText("K.Amaresh").width;
+  text("Student and Open Researcher", 120 + w + 18, H - 33, { size: 26, weight: 500, color: C.ink2 });
+  // progress through the story
+  const x0 = 1340, x1 = 1800, y = H - 44;
+  SCENES.forEach((sc, i) => {
+    const a = x0 + ((x1 - x0) * sc.s) / DURATION + (i ? 4 : 0), b = x0 + ((x1 - x0) * sc.e) / DURATION - 4;
+    ctx.fillStyle = C.rule; rrect(a, y, b - a, 6, 3); ctx.fill();
+    const k = prog(t, sc.s, sc.e);
+    if (k > 0) { ctx.fillStyle = C.exc; rrect(a, y, Math.max(6, (b - a) * k), 6, 3); ctx.fill(); }
+  });
+}
+
+function render(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = C.slide; ctx.fillRect(0, 0, W, H);
+  for (const sc of SCENES) {
+    if (t < sc.s - 0.001 || t > sc.e + 0.001) continue;
+    const fadeIn = sc.s === 0 ? 1 : prog(t, sc.s, sc.s + 0.35);
+    const fadeOut = sc.e === DURATION ? 1 : 1 - prog(t, sc.e - 0.35, sc.e);
+    ctx.save(); ctx.globalAlpha = Math.min(fadeIn, fadeOut);
+    sc.draw(t, sc.s);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  chrome(t);
+}
+
+async function loadImages(map) {
+  await Promise.all(Object.entries(map).map(([k, src]) => new Promise((res) => {
+    const im = new Image(); im.onload = () => { IMG[k] = im; res(); }; im.onerror = res; im.src = src;
+  })));
+}
+
+window.__init = async (data, images) => {
+  D = data;
+  prepare();
+  await loadImages(images || {});
+  await Promise.all([
+    document.fonts.load(`800 100px ${DISPLAY}`), document.fonts.load(`700 40px ${DISPLAY}`), document.fonts.load(`500 40px ${DISPLAY}`),
+    document.fonts.load(`400 30px ${TEXT}`), document.fonts.load(`500 30px ${TEXT}`), document.fonts.load(`600 30px ${TEXT}`), document.fonts.load(`700 30px ${TEXT}`),
+  ]).catch(() => {});
+  await document.fonts.ready;
+  window.render = render;
+  window.__ready = true;
+};
+
+// Opened over http for preview: load data next to this file and play in real time.
+if (location.protocol.startsWith("http") && !location.search.includes("capture")) {
+  fetch("video_data.json").then((r) => r.json()).then(async (d) => {
+    await window.__init(d, { lab: "shots/lab.png", network: "shots/network.png", memory: "shots/memory.png" });
+    const t0 = performance.now();
+    const seek = parseFloat(new URLSearchParams(location.search).get("t") || "0");
+    (function loop() { render((seek + (performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); })();
+  });
+}
+</script>
+</body>
+</html>

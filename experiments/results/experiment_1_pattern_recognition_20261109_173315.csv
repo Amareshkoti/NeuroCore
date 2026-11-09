@@ -1,0 +1,2 @@
+experiment_name,timestamp,seed,num_neurons,num_synapses,total_spikes,mean_firing_rate_hz,accuracy,simulation_time_sec,memory_rss_mb
+Experiment 1: Pattern Recognition,2026-11-09T17:33:05.750762,42,250,3125,4779,19.68,1.0,9.8166,255.28

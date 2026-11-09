@@ -1,208 +1,129 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { Play } from "lucide-react";
 import { api } from "../services/api";
-import { GlassCard } from "../components/GlassCard";
-import { FlaskConical, Play, CheckCircle, Clock } from "lucide-react";
+import { ExperimentSummary } from "../types";
+import { Empty, PageHead, Panel, Status, errMsg } from "../components/ui";
+
+const EXPERIMENTS = [
+  { id: 1, title: "Pattern recognition", text: "Rate-coded input patterns drive the network; a linear readout of firing rates classifies them." },
+  { id: 2, title: "Associative memory", text: "Patterns stored in recurrent weights are recalled from cues with 40% of the bits hidden." },
+  { id: 3, title: "Sequence learning", text: "Asymmetric STDP links A → B → C; the test is whether the sequence replays on its own." },
+  { id: 4, title: "STDP learning", text: "Paired pre/post stimulation at fixed offsets, measuring potentiation and depression." },
+  { id: 5, title: "Noise resistance", text: "Recall accuracy as 10% to 50% of the cue's bits are flipped." },
+  { id: 6, title: "Excitation versus inhibition", text: "An all-excitatory network against an 80/20 balanced one: runaway synchrony or stable firing." },
+  { id: 7, title: "Spiking network versus MLP", text: "The spiking network and a PyTorch multilayer perceptron on the same dataset." },
+  { id: 8, title: "LLM, network, hybrid", text: "Modes A, B and C on a fixed prompt through local Ollama. Takes one to two minutes." },
+];
+
+// show the scalar results of a run; nested objects are flattened one level
+function flatten(obj: Record<string, unknown>): [string, string][] {
+  const out: [string, string][] = [];
+  const show = (v: unknown) => (typeof v === "number" ? (Number.isInteger(v) ? v.toLocaleString() : v.toFixed(4)) : String(v));
+  for (const [k, v] of Object.entries(obj)) {
+    if (["experiment_name", "timestamp"].includes(k)) continue;
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) {
+      for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) {
+        if (v2 === null || typeof v2 !== "object") out.push([`${k} / ${k2}`, show(v2)]);
+      }
+    } else if (!Array.isArray(v)) out.push([k, show(v)]);
+    else if (v.length <= 8 && v.every((x) => typeof x !== "object")) out.push([k, v.map(show).join(", ")]);
+  }
+  return out;
+}
+
+const label = (k: string) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
 export const ExperimentsPage: React.FC = () => {
-  const [runningId, setRunningId] = useState<number | null>(null);
-  const [activeResult, setActiveResult] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
-  const [statusMsg, setStatusMsg] = useState<string>("");
+  const [running, setRunning] = useState<number | null>(null);
+  const [neurons, setNeurons] = useState(250);
+  const [result, setResult] = useState<Record<string, unknown> | null>(null);
+  const [history, setHistory] = useState<ExperimentSummary[]>([]);
+  const [status, setStatus] = useState({ msg: "", error: false });
 
-  const experimentsList = [
-    {
-      id: 1,
-      title: "Experiment 1: Pattern Recognition",
-      description: "Classifies structured sensory input patterns using rate coding into an SNN reservoir with linear readout.",
-      target: "SNN Reservoir Classifier",
-    },
-    {
-      id: 2,
-      title: "Experiment 2: Associative Memory",
-      description: "Embeds sparse orthogonal prototypes in synaptic matrix W; tests attractor recall from 40% occluded cues.",
-      target: "Recurrent Attractor Network",
-    },
-    {
-      id: 3,
-      title: "Experiment 3: Temporal Sequence Learning",
-      description: "Tests asymmetric STDP training of sequential transition pathways (A -> B -> C) and autonomous delay replay.",
-      target: "Axonal Delay Replay",
-    },
-    {
-      id: 4,
-      title: "Experiment 4: STDP Learning",
-      description: "Quantifies Long-Term Potentiation (LTP) and Long-Term Depression (LTD) dynamics under paired stimulation.",
-      target: "Bi & Poo Synaptic Plasticity",
-    },
-    {
-      id: 5,
-      title: "Experiment 5: Noise Resistance",
-      description: "Evaluates attractor stability and bit recovery across 10%, 20%, 30%, 40%, and 50% bit-flip corruption noise.",
-      target: "Attractor Energy Basins",
-    },
-    {
-      id: 6,
-      title: "Experiment 6: Excitatory vs Inhibitory Behaviour",
-      description: "Demonstrates how Dale's principle balanced inhibition prevents epileptic runaway synchronization.",
-      target: "Cortical E/I Balance",
-    },
-    {
-      id: 7,
-      title: "Experiment 7: SNN vs Conventional Feedforward ANN",
-      description: "Direct empirical benchmark between Spiking Neural Network and standard PyTorch MLP on the identical dataset.",
-      target: "PyTorch MLP vs SNN",
-    },
-    {
-      id: 8,
-      title: "Experiment 8: LLM-Only vs Neural-Only vs Hybrid AI",
-      description: "Comparative study across Mode A, Mode B, and Mode C hybrid processing using the local Ollama instance.",
-      target: "Hybrid Intelligence",
-    },
-  ];
-
-  const fetchHistory = async () => {
-    try {
-      const data = await api.getExperimentResults();
-      setHistory(data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
+  const loadHistory = () => api.getExperimentResults().then(setHistory).catch(() => setHistory([]));
   useEffect(() => {
-    fetchHistory();
+    loadHistory();
   }, []);
 
-  const handleRun = async (expId: number) => {
-    setRunningId(expId);
-    setStatusMsg(`Running Experiment ${expId}...`);
+  const run = async (id: number) => {
+    setRunning(id);
+    setStatus({ msg: `Running experiment ${id}…`, error: false });
+    const t0 = performance.now();
     try {
-      const res = await api.runExperiment(expId, 250);
-      setActiveResult(res);
-      setStatusMsg(`Experiment ${expId} finished successfully`);
-      fetchHistory();
-    } catch (err: any) {
-      console.error(err);
-      setStatusMsg(`Experiment ${expId} failed: ${err.message || err}`);
+      setResult(await api.runExperiment(id, neurons));
+      setStatus({ msg: `Experiment ${id} finished in ${((performance.now() - t0) / 1000).toFixed(1)} s and was saved to experiments/results.`, error: false });
+      loadHistory();
+    } catch (e) {
+      setStatus({ msg: `Experiment ${id} failed: ${errMsg(e)}`, error: true });
     } finally {
-      setRunningId(null);
+      setRunning(null);
     }
   };
 
   return (
-    <div
-      style={{
-        padding: "20px 24px",
-        maxWidth: "1440px",
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-      }}
-    >
-      {/* Header Banner */}
-      <GlassCard style={{ padding: "16px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-          <div>
-            <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
-              <span className="badge badge-purple">Scientific Verification</span>
-              <span className="badge badge-neutral">Reproducible Seeds</span>
-            </div>
-            <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-primary)" }}>
-              Automated Neuroscience Experiments & Benchmarks
-            </h2>
-            <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
-              Eight scientific experiments with metric logging, CSV/JSON recording, and direct validation.
-            </p>
-          </div>
+    <>
+      <PageHead
+        title="Experiments"
+        intro="Eight fixed protocols with seed 42. Each run records network size, spikes, rates, timing and memory use to JSON and CSV."
+      >
+        <label className="row" style={{ fontSize: 14, color: "var(--ink-2)" }}>
+          Neurons
+          <select value={neurons} onChange={(e) => setNeurons(+e.target.value)} style={{ width: 110 }}>
+            {[100, 250, 500, 1000].map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+      </PageHead>
 
-          {statusMsg && (
-            <div style={{ fontSize: "12px", fontFamily: "var(--font-mono)", color: "var(--accent-blue)" }}>
-              [{statusMsg}]
-            </div>
-          )}
-        </div>
-      </GlassCard>
-
-      {/* Grid: 8 Experiments List */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "14px" }}>
-        {experimentsList.map((exp) => (
-          <GlassCard
-            key={exp.id}
-            style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}
-          >
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
-                <span className="badge badge-blue">EXP {exp.id}</span>
-                <span className="badge badge-neutral">{exp.target}</span>
-              </div>
-              <h3 style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "6px" }}>
-                {exp.title}
-              </h3>
-              <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: "14px" }}>
-                {exp.description}
-              </p>
-            </div>
-
-            <button
-              onClick={() => handleRun(exp.id)}
-              disabled={runningId !== null}
-              className={`btn ${runningId === exp.id ? "btn-secondary" : "btn-primary"}`}
-              style={{ width: "100%" }}
-            >
-              {runningId === exp.id ? <Clock size={13} /> : <Play size={13} />}
-              {runningId === exp.id ? "Executing..." : "Run Experiment"}
+      <div className="grid cols-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))" }}>
+        {EXPERIMENTS.map((e) => (
+          <Panel key={e.id} title={`${e.id}. ${e.title}`}>
+            <p className="prose" style={{ marginBottom: 14, minHeight: 66 }}>{e.text}</p>
+            <button className="btn block" disabled={running !== null} onClick={() => run(e.id)}>
+              <Play size={14} /> {running === e.id ? "Running…" : "Run"}
             </button>
-          </GlassCard>
+          </Panel>
         ))}
       </div>
 
-      {/* Active Experiment Results Panel */}
-      {activeResult && (
-        <GlassCard>
-          <div className="panel-header">
-            <span className="panel-title">
-              <CheckCircle size={15} color="#10b981" /> Experiment Results: {activeResult.experiment_name}
-            </span>
-            <span className="badge badge-emerald">Completed</span>
-          </div>
+      <Status {...status} />
+      <div style={{ height: 18 }} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", marginBottom: "14px" }}>
-            <div className="stat-card">
-              <div className="stat-label">Execution Time</div>
-              <div className="stat-val">{activeResult.metrics.execution_time_sec.toFixed(3)}s</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Neurons</div>
-              <div className="stat-val">{activeResult.metrics.network_size}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Spikes Recorded</div>
-              <div className="stat-val">{activeResult.metrics.spikes_emitted.toLocaleString()}</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-label">Firing Rate</div>
-              <div className="stat-val">{activeResult.metrics.mean_firing_rate_hz.toFixed(1)} Hz</div>
-            </div>
-          </div>
+      <div className="grid cols-2">
+        <Panel title={result ? String(result.experiment_name ?? "Result") : "Result"}>
+          {result ? (
+            <table className="kv">
+              <tbody>
+                {flatten(result).map(([k, v]) => (
+                  <tr key={k}><th>{label(k)}</th><td>{v}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <Empty>Run an experiment to see its measurements here.</Empty>
+          )}
+        </Panel>
 
-          <div
-            style={{
-              background: "var(--bg-surface-subtle)",
-              border: "1px solid var(--border-default)",
-              borderRadius: "4px",
-              padding: "12px",
-              fontFamily: "var(--font-mono)",
-              fontSize: "11px",
-              color: "var(--text-primary)",
-              maxHeight: "240px",
-              overflowY: "auto",
-            }}
-          >
-            {JSON.stringify(activeResult, null, 2)}
-          </div>
-        </GlassCard>
-      )}
-    </div>
+        <Panel title="Saved runs" aside={`${history.length} most recent`}>
+          {history.length ? (
+            <div style={{ overflowX: "auto" }}>
+              <table className="table">
+                <thead><tr><th>Experiment</th><th>Accuracy</th><th>Time</th></tr></thead>
+                <tbody>
+                  {history.map((h) => (
+                    <tr key={h.filename} title={h.filename}>
+                      <td>{h.experiment_name}<div className="caption" style={{ marginTop: 2 }}>{new Date(h.timestamp).toLocaleString()}</div></td>
+                      <td>{h.accuracy == null ? "–" : `${(h.accuracy * 100).toFixed(1)}%`}</td>
+                      <td>{h.simulation_time_sec == null ? "–" : `${h.simulation_time_sec.toFixed(2)} s`}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <Empty>No saved runs yet.</Empty>
+          )}
+        </Panel>
+      </div>
+    </>
   );
 };

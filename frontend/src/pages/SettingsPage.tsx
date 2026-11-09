@@ -1,163 +1,60 @@
 import React, { useState } from "react";
 import { SystemStatus } from "../types";
-import { GlassCard } from "../components/GlassCard";
-import { Sliders, Bot, Cpu, Save } from "lucide-react";
+import { Defaults, loadDefaults, saveDefaults } from "../services/settings";
+import { PageHead, Panel, Segmented, Slider, Status } from "../components/ui";
 
-interface SettingsPageProps {
-  system: SystemStatus | null;
-}
+export const SettingsPage: React.FC<{ system: SystemStatus | null }> = ({ system }) => {
+  const [d, setD] = useState<Defaults>(loadDefaults);
+  const [status, setStatus] = useState({ msg: "", error: false });
+  const set = <K extends keyof Defaults>(k: K, v: Defaults[K]) => setD((p) => ({ ...p, [k]: v }));
 
-export const SettingsPage: React.FC<SettingsPageProps> = ({ system }) => {
-  const [ollamaEndpoint, setOllamaEndpoint] = useState<string>("http://127.0.0.1:11434");
-  const [defaultModel, setDefaultModel] = useState<string>("qwen2.5:3b-instruct");
-  const [embedModel, setEmbedModel] = useState<string>("nomic-embed-text:latest");
-  const [defaultNeurons, setDefaultNeurons] = useState<number>(1000);
-  const [dtMs, setDtMs] = useState<number>(0.1);
-  const [randomSeed, setRandomSeed] = useState<number>(42);
-  const [savedMsg, setSavedMsg] = useState<string>("");
-
-  const handleSave = () => {
-    setSavedMsg("Settings successfully saved to research session");
-    setTimeout(() => setSavedMsg(""), 4000);
-  };
+  const save = () =>
+    setStatus(
+      saveDefaults(d)
+        ? { msg: "Saved. New networks built from the lab will use these values.", error: false }
+        : { msg: "This browser blocked local storage, so the values last only until you reload.", error: true },
+    );
 
   return (
-    <div
-      style={{
-        padding: "20px 24px",
-        maxWidth: "960px",
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-      }}
-    >
-      {/* Header Banner */}
-      <GlassCard style={{ padding: "16px 20px" }}>
-        <div style={{ display: "flex", gap: "6px", marginBottom: "6px" }}>
-          <span className="badge badge-neutral">Platform Configuration</span>
-        </div>
-        <h2 style={{ fontSize: "1.3rem", fontWeight: 700, color: "var(--text-primary)" }}>
-          Research Workstation & Engine Parameters
-        </h2>
-        <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "2px" }}>
-          Configure connection endpoints, inference models, and default computational neuroscience simulation parameters.
-        </p>
-      </GlassCard>
+    <>
+      <PageHead title="Settings" intro="Defaults for new networks, and the language model the backend is configured to use." />
 
-      {/* Settings Form */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-        {/* Ollama Settings */}
-        <GlassCard>
-          <div className="panel-header">
-            <span className="panel-title">
-              <Bot size={15} /> Local Ollama Engine Configuration
-            </span>
+      <div className="grid cols-2">
+        <Panel title="New network defaults">
+          <label className="field">
+            <span>Neurons</span>
+            <input type="number" min={50} max={10000} value={d.numNeurons} onChange={(e) => set("numNeurons", Math.max(50, Math.min(10000, +e.target.value || 50)))} />
+          </label>
+          <div className="field">
+            <span>Neuron model</span>
+            <Segmented label="Neuron model" value={d.modelType} onChange={(v) => set("modelType", v)} options={[{ value: "lif", label: "Leaky integrate-and-fire" }, { value: "adex", label: "Adaptive exponential" }]} />
           </div>
+          <Slider label="Excitatory share" value={d.excitatoryRatio} display={`${Math.round(d.excitatoryRatio * 100)}%`} min={0.5} max={1} step={0.05} onChange={(v) => set("excitatoryRatio", v)} />
+          <Slider label="Connection probability" value={d.connectionProbability} display={`${(d.connectionProbability * 100).toFixed(1)}%`} min={0.005} max={0.1} step={0.005} onChange={(v) => set("connectionProbability", v)} />
+          <label className="field">
+            <span>Random seed</span>
+            <input type="number" value={d.seed} onChange={(e) => set("seed", parseInt(e.target.value) || 0)} />
+          </label>
+          <button className="btn primary" onClick={save}>Save defaults</button>
+          <Status {...status} />
+        </Panel>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
-            <div>
-              <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                API Endpoint (This Host Machine)
-              </label>
-              <input
-                type="text"
-                value={ollamaEndpoint}
-                onChange={(e) => setOllamaEndpoint(e.target.value)}
-                style={{ width: "100%", fontFamily: "var(--font-mono)" }}
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                  Default LLM Model
-                </label>
-                <input
-                  type="text"
-                  value={defaultModel}
-                  onChange={(e) => setDefaultModel(e.target.value)}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                  Embedding Model
-                </label>
-                <input
-                  type="text"
-                  value={embedModel}
-                  onChange={(e) => setEmbedModel(e.target.value)}
-                  style={{ width: "100%" }}
-                />
-              </div>
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Biological SNN ODE Parameters */}
-        <GlassCard>
-          <div className="panel-header">
-            <span className="panel-title">
-              <Cpu size={15} /> SNN Differential Integration Parameters
-            </span>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "13px" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "14px" }}>
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                  Default Neuron Count
-                </label>
-                <input
-                  type="number"
-                  value={defaultNeurons}
-                  onChange={(e) => setDefaultNeurons(parseInt(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                  Integration Step Size dt (ms)
-                </label>
-                <input
-                  type="number"
-                  step="0.05"
-                  value={dtMs}
-                  onChange={(e) => setDtMs(parseFloat(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
-                  Reproducible Seed
-                </label>
-                <input
-                  type="number"
-                  value={randomSeed}
-                  onChange={(e) => setRandomSeed(parseInt(e.target.value))}
-                  style={{ width: "100%" }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
-              <button onClick={handleSave} className="btn btn-primary">
-                <Save size={14} /> Save Configuration
-              </button>
-            </div>
-
-            {savedMsg && (
-              <div style={{ fontSize: "12px", color: "var(--accent-emerald)", fontFamily: "var(--font-mono)" }}>
-                [{savedMsg}]
-              </div>
-            )}
-          </div>
-        </GlassCard>
+        <Panel title="Language model">
+          <table className="kv">
+            <tbody>
+              <tr><th>Endpoint</th><td>{system?.ollama.endpoint ?? "–"}</td></tr>
+              <tr><th>Chat model</th><td>{system?.ollama.active_model ?? "–"}</td></tr>
+              <tr><th>Embedding model</th><td>{system?.ollama.active_embed_model ?? "–"}</td></tr>
+              <tr><th>Status</th><td>{system ? (system.ollama.available ? "Reachable" : "Not reachable") : "–"}</td></tr>
+            </tbody>
+          </table>
+          <p className="prose" style={{ marginTop: 14 }}>
+            These come from the backend. To change them, set <strong>OLLAMA_ENDPOINT</strong>, <strong>OLLAMA_DEFAULT_MODEL</strong> and{" "}
+            <strong>OLLAMA_DEFAULT_EMBED_MODEL</strong> in <strong>.env</strong> and restart the server. The model can also be picked per request on the Hybrid AI page.
+          </p>
+          <p className="prose" style={{ marginTop: 10 }}>The integration step is fixed at 0.1 ms in the simulator.</p>
+        </Panel>
       </div>
-    </div>
+    </>
   );
 };

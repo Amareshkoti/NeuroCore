@@ -247,7 +247,15 @@ def recall_memory_pattern(req: MemoryRecallRequest) -> Dict[str, Any]:
         cue[flips] = 1.0 - cue[flips]
 
     res = state.memory.recall(cue)
-    return {"query_pattern": req.pattern_name, "recall_result": res}
+    settled = state.memory.network.population_firing_rates_hz.copy()
+    return {
+        "query_pattern": req.pattern_name,
+        "recall_result": res,
+        # raw vectors so the UI can draw stored pattern, corrupted cue and settled activity
+        "original": [int(x) for x in original],
+        "cue": [int(round(float(x))) for x in cue],
+        "settled_rates_hz": [round(float(r), 1) for r in settled],
+    }
 
 @app.get("/api/memory/noise_benchmark")
 def get_noise_benchmark(pattern: str = "Alpha") -> Dict[str, Any]:
@@ -348,10 +356,14 @@ async def websocket_simulation_stream(websocket: WebSocket):
                 pass
 
             # If simulation is active, step the network
+            # Every spike emitted during this packet's steps, as [t_ms, neuron_id]
+            spike_events: List[List[float]] = []
             if state.is_running:
                 # Run 5 steps of 0.1ms (0.5ms biological time per packet)
                 for _ in range(5):
-                    state.network.step()
+                    t_ms = round(state.network.current_time_ms, 2)
+                    step_spikes = state.network.step()
+                    spike_events.extend([t_ms, int(i)] for i in np.where(step_spikes)[0])
 
             # Stream telemetry packet
             metrics = state.network.get_realtime_metrics()
@@ -363,6 +375,7 @@ async def websocket_simulation_stream(websocket: WebSocket):
                 "metrics": metrics,
                 "is_running": state.is_running,
                 "spiked_ids": spiked_indices,
+                "spike_events": spike_events,
                 "sample_v": voltage_sample,
             }
             await websocket.send_text(json.dumps(packet))
